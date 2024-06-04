@@ -1,3 +1,190 @@
+# ProShop Application Deployment Guide
+
+# Automated CI/CD Pipeline for a Full-Stack Application
+
+This README describes the creation and configuration of an automated CI/CD pipeline using GitHub Actions, Helm, Docker, AWS IAM, and Kubernetes Ingress for an application with both frontend and backend components.
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Prerequisites](#prerequisites)
+3. [Architecture Overview](#architecture-overview)
+4. [GitHub Actions](#github-actions)
+5. [Docker and Amazon ECR](#docker-and-amazon-ecr)
+6. [AWS IAM](#aws-iam)
+7. [Helm](#helm)
+
+## Introduction
+
+This is an automated CI/CD pipeline for a full-stack application. The pipeline leverages GitHub Actions for CI/CD, Docker for containerization, Helm for Kubernetes deployment management, AWS IAM for secure access management, AWS Secrets Manager for credentials, and Kubernetes Ingress for routing and load balancing.
+
+## Prerequisites
+
+Before you begin, ensure you have the following:
+
+- A GitHub account with access to the repository.
+- Docker installed on your local machine.
+- Helm installed on your local machine.
+- AWS CLI installed and configured with appropriate IAM permissions.
+- A Kubernetes cluster (e.g., EKS) with `kubectl` configured to interact with it.
+- Domain names configured according to the specified hostname
+
+## Architecture Overview
+
+The architecture of the pipeline is designed to streamline the deployment process. Here is an overview:
+
+- **Frontend and Backend Repositories:** Separate repositories for frontend and backend code.
+- **GitHub Actions:** Workflows defined to automate build, test, and deployment processes.
+- **Docker:** Containerizes the application for consistency across different environments.
+- **Helm:** Manages Kubernetes manifests and deployment configurations.
+- **AWS IAM:** Secures access to AWS resources.
+- **AWS Secrets:** Stores credentials.
+- **Kubernetes Ingress:** Manages routing and load balancing for the application.
+
+## GitHub Actions
+
+GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of the steps:
+
+### Workflow Files
+
+- `.github/workflows/cicd.yml`: Defines the workflow for the whole application. It includes steps from building and pushing a Docker image to ECR repository to deploying it with helm charts in EKS cluster.
+
+### Key Steps
+
+1. **Checkout Code:** Uses `actions/checkout@v2` to fetch the latest code.
+2. **Build and Test:** Runs the build and test commands for both frontend and backend.
+3. **Docker Build and Push:** Builds Docker images and pushes them to Docker Hub or an AWS ECR repository.
+4. **Deploy with Helm:** Deploys the application to the Kubernetes cluster using Helm. (Not yet)
+
+### Detailed Look Into Workflow File
+
+- **Triggers**: 
+  - The workflow is triggered on pushes to branches matching `feature/**` and `staging`.
+
+- **Permissions**:
+  - The workflow requires specific permissions to assume the AWS IAM role:
+    - `id-token: write`
+    - `contents: read`
+
+- **Environment Variables**:
+  - `AWS_REGION`: Specifies the AWS region (`us-east-1`).
+  - `ENVIRONMENT_STAGE`: Determines the deployment environment based on the branch:
+    - `production` for `main`
+    - `staging` for `staging`
+    - `dev` for all other branches
+
+- **Jobs**:
+  - **proshop-app-build-and-deploy**:
+    - Runs on `ubuntu-latest`.
+    - Uses the appropriate environment based on the branch.
+    - **Steps**:
+      1. **Checkout Branch**:
+         - Uses `actions/checkout@v3` to checkout the branch.
+      2. **Configure AWS Credentials**:
+         - Uses `aws-actions/configure-aws-credentials@v4` to configure AWS credentials with the specified role and region.
+      3. **Login to Amazon ECR**:
+         - Uses `aws-actions/amazon-ecr-login@v2` to login to Amazon ECR.
+      4. **Backend - Build, tag, and push Docker image**:
+         - Builds, tags, and pushes the Docker image for the backend to Amazon ECR.
+         - This step is skipped for the `main` branch.
+      5. **Frontend - Build, tag, and push Docker image**:
+         - Builds, tags, and pushes the Docker image for the frontend to Amazon ECR.
+         - This step is skipped for the `main` branch.
+
+## Docker and Amazon ECR
+
+This project utilizes Docker for containerization and Amazon Elastic Container Registry (ECR) for storing and managing Docker images.
+
+### Docker
+
+Docker is an open platform for developing, shipping, and running applications. Using Docker, we can separate our applications from our infrastructure, ensuring consistency across multiple development and release cycles. Docker allows us to package software into standardized units called containers that include everything the software needs to run, including libraries, dependencies, and configuration files.
+
+### Amazon Elastic Container Registry (ECR)
+
+Amazon ECR is a fully managed Docker container registry that makes it easy to store, manage, and deploy Docker container images. ECR is integrated with Amazon Elastic Container Service (ECS), simplifying the process of managing and deploying containerized applications.
+
+### Workflow with Docker and ECR
+1. **Dockerfile Creation:**
+Define a Dockerfile for frontend and backend specifying the base image, dependencies, and runtime configuration.
+2. **Building and Pushing Docker Images with GitHub Actions**:
+Utilize GitHub Actions workflows to automate the build, tagging, and pushing of Docker images to AWS ECR.
+```yaml
+- name: Backend - Build, tag, and push docker image to Amazon ECR
+  if: github.ref != 'refs/heads/main'
+  env:
+    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    REPOSITORY: proshop-backend
+    IMAGE_TAG: ${{ github.sha }}
+  working-directory: ./backend
+  run: |
+    docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+    docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+- name: Frontend - Build, tag, and push docker image to Amazon ECR
+  if: github.ref != 'refs/heads/main'
+  env:
+    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    REPOSITORY: proshop-frontend
+    IMAGE_TAG: ${{ github.sha }}
+  working-directory: ./frontend
+  run: |
+    docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+    docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+```
+
+## AWS IAM
+
+To securely integrate AWS services with GitHub Actions, create an IAM role named `GitHubActionsCICDrole`. This role enables GitHub Actions workflows to interact with AWS services like ECR and EKS by establishing a trust relationship using OpenID Connect (OIDC).
+
+### Setup for GitHub Actions
+
+1. **OIDC Identity Provider**:
+   - In AWS IAM, create an OIDC identity provider for GitHub Actions.
+   - Use `https://token.actions.githubusercontent.com` as the provider URL and `sts.amazonaws.com` as the audience.
+
+2. **IAM Role Creation**:
+   - Create the `GitHubActionsCICDrole` with the OIDC provider as the trusted entity.
+   - Define a condition to restrict the role to be assumable only by workflows from your specific GitHub repository, ensuring enhanced security.
+
+3. **Attach Policies**:
+   - Assign necessary permissions to the role for interacting with ECR for Docker image storage and EKS for Kubernetes cluster operations.
+   - Ensure the policies adhere to the principle of least privilege.
+
+### Kubernetes Cluster Access
+
+To grant the `GitHubActionsCICDrole` permissions within your EKS cluster, update the `aws-auth` ConfigMap:
+
+1. **Retrieve the current aws-auth ConfigMap**:
+   ```bash
+   kubectl get configmap/aws-auth -n kube-system -o yaml > aws-auth.yaml
+   ```
+
+2. **Edit the aws-auth.yaml file**:
+   - Add the following snippet under the `mapRoles` section, replacing `<your-aws-account-id>` with your actual AWS account ID:
+   ```yaml
+   - rolearn: arn:aws:iam::<your-aws-account-id>:role/GitHubActionsCICDrole
+     username: github-actions
+     groups:
+       - system:masters
+
+3. **Apply the updated aws-auth ConfigMap**:
+   ```bash
+   kubectl apply -f aws-auth.yaml
+   ```
+
+This configuration establishes a secure link between GitHub Actions and AWS, facilitating seamless CI/CD workflows for deploying and managing your application.
+
+## Helm
+
+Working on it...
+
+
+
+
+
+
+==========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
+
 my ticket : 
 
 ticket 13 

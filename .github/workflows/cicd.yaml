@@ -1,0 +1,57 @@
+name: proshop app Image CI
+
+on:
+  push:
+    branches:
+      - feature/**
+      - staging
+
+# required permissions by GitHub Actions for assuming AWS IAM role
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: "us-east-1"
+  ENVIRONMENT_STAGE: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
+
+jobs:
+  proshop-app-build-and-deploy:
+    environment: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Branch
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.IAM_ROLE }}
+          role-session-name: GitHubActionsCICDrole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Backend - Build, tag, and push docker image to Amazon ECR
+        if: github.ref != 'refs/heads/main'
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: proshop-backend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./backend
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+      - name: Frontend - Build, tag, and push docker image to Amazon ECR
+        if: github.ref != 'refs/heads/main'
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: proshop-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./frontend
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG

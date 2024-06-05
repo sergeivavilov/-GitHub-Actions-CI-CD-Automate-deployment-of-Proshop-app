@@ -1,0 +1,491 @@
+Directory Structure:
+.
+├── README.md
+├── backend
+│   ├── Dockerfile
+│   ├── config
+│   │   └── db.js
+│   ├── controllers
+│   │   ├── orderController.js
+│   │   ├── productController.js
+│   │   └── userController.js
+│   ├── data
+│   │   ├── products.js
+│   │   └── users.js
+│   ├── middleware
+│   │   ├── asyncHandler.js
+│   │   ├── authMiddleware.js
+│   │   ├── checkObjectId.js
+│   │   └── errorMiddleware.js
+│   ├── models
+│   │   ├── orderModel.js
+│   │   ├── productModel.js
+│   │   └── userModel.js
+│   ├── routes
+│   │   ├── orderRoutes.js
+│   │   ├── productRoutes.js
+│   │   ├── uploadRoutes.js
+│   │   └── userRoutes.js
+│   ├── seeder.js
+│   ├── server.js
+│   └── utils
+│       ├── calcPrices.js
+│       ├── generateToken.js
+│       └── paypal.js
+├── frontend
+│   ├── Dockerfile
+│   ├── README.md
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── public
+│   │   ├── favicon.ico
+│   │   ├── images
+│   │   │   ├── airpods.jpg
+│   │   │   ├── alexa.jpg
+│   │   │   ├── camera.jpg
+│   │   │   ├── mouse.jpg
+│   │   │   ├── phone.jpg
+│   │   │   ├── playstation.jpg
+│   │   │   ├── sample.jpg
+│   │   │   └── screens.png
+│   │   ├── index.html
+│   │   ├── logo192.png
+│   │   ├── logo512.png
+│   │   ├── manifest.json
+│   │   └── robots.txt
+│   └── src
+│       ├── App.js
+│       ├── assets
+│       │   ├── logo.png
+│       │   └── styles
+│       │       ├── bootstrap.custom.css
+│       │       └── index.css
+│       ├── components
+│       │   ├── AdminRoute.jsx
+│       │   ├── CheckoutSteps.jsx
+│       │   ├── Footer.jsx
+│       │   ├── FormContainer.jsx
+│       │   ├── Header.jsx
+│       │   ├── Loader.jsx
+│       │   ├── Message.jsx
+│       │   ├── Meta.jsx
+│       │   ├── Paginate.jsx
+│       │   ├── PrivateRoute.jsx
+│       │   ├── Product.jsx
+│       │   ├── ProductCarousel.jsx
+│       │   ├── Rating.jsx
+│       │   └── SearchBox.jsx
+│       ├── constants.js
+│       ├── index.js
+│       ├── reportWebVitals.js
+│       ├── screens
+│       │   ├── CartScreen.jsx
+│       │   ├── HomeScreen.jsx
+│       │   ├── LoginScreen.jsx
+│       │   ├── OrderScreen.jsx
+│       │   ├── PaymentScreen.jsx
+│       │   ├── PlaceOrderScreen.jsx
+│       │   ├── ProductScreen.jsx
+│       │   ├── ProfileScreen.jsx
+│       │   ├── RegisterScreen.jsx
+│       │   ├── ShippingScreen.jsx
+│       │   └── admin
+│       │       ├── OrderListScreen.jsx
+│       │       ├── ProductEditScreen.jsx
+│       │       ├── ProductListScreen.jsx
+│       │       ├── UserEditScreen.jsx
+│       │       └── UserListScreen.jsx
+│       ├── setupTests.js
+│       ├── slices
+│       │   ├── apiSlice.js
+│       │   ├── authSlice.js
+│       │   ├── cartSlice.js
+│       │   ├── ordersApiSlice.js
+│       │   ├── productsApiSlice.js
+│       │   └── usersApiSlice.js
+│       ├── store.js
+│       └── utils
+│           └── cartUtils.js
+├── helm
+│   ├── backend
+│   │   ├── Chart.yaml
+│   │   ├── dev-values.yaml
+│   │   ├── templates
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   └── values.yaml
+│   └── frontend
+│       ├── Chart.yaml
+│       ├── dev-values.yaml
+│       ├── templates
+│       │   ├── deployment.yaml
+│       │   └── service.yaml
+│       └── values.yaml
+├── package-lock.json
+├── package.json
+├── pnpm-lock.yaml
+├── static
+│   └── documentdb_connection.png
+├── terraform
+│   ├── dev.tfvars
+│   ├── main.tf
+│   ├── production.tfvars
+│   ├── staging.tfvars
+│   └── variables.tf
+├── tree_and_files.txt
+└── uploads
+
+28 directories, 107 files
+
+.github/workflows/cicd.yaml
+Contents of .github/workflows/cicd.yaml:
+name: proshop app Image CI
+
+on:
+  push:
+    branches:
+      - feature/**
+      - staging
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: "us-east-1"
+
+jobs:
+  proshop-app-build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Branch
+        uses: actions/checkout@v3
+
+      - name: Set Environment Stage
+        id: set-env-stage
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV; else echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV; fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.IAM_ROLE }} # Corrected line
+          role-session-name: GitHubActionsCICDrole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Backend - Build, tag, and push docker image to Amazon ECR
+        if: github.ref != 'refs/heads/main'
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: proshop-backend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./backend
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+      - name: Frontend - Build, tag, and push docker image to Amazon ECR
+        if: github.ref != 'refs/heads/main'
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: proshop-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./frontend
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+./terraform/production.tfvars
+Contents of ./terraform/production.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.large"
+
+./terraform/main.tf
+Contents of ./terraform/main.tf:
+provider "aws" {
+  region = var.region
+}
+
+resource "aws_instance" "example" {
+  ami           = var.ami
+  instance_type = var.instance_type
+
+  tags = {
+    Name = "example-instance"
+  }
+}
+
+./terraform/dev.tfvars
+Contents of ./terraform/dev.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.micro"
+
+./terraform/staging.tfvars
+Contents of ./terraform/staging.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.medium"
+
+./terraform/variables.tf
+Contents of ./terraform/variables.tf:
+variable "region" {
+  description = "The AWS region to deploy into"
+  type        = string
+}
+
+variable "ami" {
+  description = "The AMI to use for the instance"
+  type        = string
+}
+
+variable "instance_type" {
+  description = "The type of instance to use"
+  type        = string
+}
+
+./frontend/Dockerfile
+Contents of ./frontend/Dockerfile:
+# Use an official Node.js image as the base image
+FROM node:16-alpine
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json (if available)
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install && npm cache clean --force
+
+# Copy the rest of the application code
+COPY . .
+
+# Build the frontend
+RUN npm run build
+
+# Expose the port on which your app will run
+EXPOSE 3000
+
+# Command to run the application
+CMD ["npm", "start"]
+
+./backend/Dockerfile
+Contents of ./backend/Dockerfile:
+FROM node:16
+
+#Set Wokrdir and Copy Context
+WORKDIR /app
+COPY package*.json ./
+
+#Install Package Dependency
+RUN npm install --quiet && npm cache clean --force
+
+#Copy Context To Docker Image
+COPY . .
+
+#Expose Image Port
+EXPOSE 5000
+
+#Start Backend Server
+CMD ["npm", "run", "server"]
+
+./helm/frontend/dev-values.yaml
+Contents of ./helm/frontend/dev-values.yaml:
+replicaCount: 2
+image:
+  tag: <IMAGE_TAG>
+service:
+  type: ClusterIP
+  port: 5000
+ingress:
+  enabled: true
+  hosts:
+    - host: shop-ubuntu-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - shop-ubuntu-dev.312ubuntu.com
+
+./helm/frontend/Chart.yaml
+Contents of ./helm/frontend/Chart.yaml:
+apiVersion: v2
+name: frontend
+description: A Helm chart for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+./helm/frontend/templates/deployment.yaml
+Contents of ./helm/frontend/templates/deployment.yaml:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "frontend.fullname" . }}
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "frontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "frontend.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: frontend-secrets
+
+./helm/frontend/templates/service.yaml
+Contents of ./helm/frontend/templates/service.yaml:
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "frontend.fullname" . }}
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 5000
+  selector:
+    {{- include "frontend.selectorLabels" . | nindent 4 }}
+
+./helm/frontend/values.yaml
+Contents of ./helm/frontend/values.yaml:
+replicaCount: 1
+
+image:
+  repository: <ECR_REGISTRY>/proshop-frontend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: shop-ubuntu-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+./helm/backend/dev-values.yaml
+Contents of ./helm/backend/dev-values.yaml:
+replicaCount: 2
+image:
+  tag: <IMAGE_TAG>
+service:
+  type: ClusterIP
+  port: 5000
+ingress:
+  enabled: true
+  hosts:
+    - host: shop-ubuntu-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: backend-tls
+      hosts:
+        - shop-ubuntu-dev.312ubuntu.com
+
+./helm/backend/Chart.yaml
+Contents of ./helm/backend/Chart.yaml:
+apiVersion: v2
+name: backend
+description: A Helm chart for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+./helm/backend/templates/deployment.yaml
+Contents of ./helm/backend/templates/deployment.yaml:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "backend.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: backend-secrets
+
+./helm/backend/templates/service.yaml
+Contents of ./helm/backend/templates/service.yaml:
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 5000
+  selector:
+    {{- include "backend.selectorLabels" . | nindent 4 }}
+
+./helm/backend/values.yaml
+Contents of ./helm/backend/values.yaml:
+replicaCount: 1
+
+image:
+  repository: <ECR_REGISTRY>/proshop-backend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: shop-ubuntu-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+

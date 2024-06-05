@@ -1,0 +1,17 @@
+replicaCount: 2
+image:
+  tag: <IMAGE_TAG>
+service:
+  type: ClusterIP
+  port: 5000
+ingress:
+  enabled: true
+  hosts:
+    - host: shop-ubuntu-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - shop-ubuntu-dev.312ubuntu.com

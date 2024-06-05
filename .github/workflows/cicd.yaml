@@ -6,27 +6,29 @@ on:
       - feature/**
       - staging
 
-# required permissions by GitHub Actions for assuming AWS IAM role
 permissions:
   id-token: write
   contents: read
 
 env:
   AWS_REGION: "us-east-1"
-  ENVIRONMENT_STAGE: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
 
 jobs:
   proshop-app-build-and-deploy:
-    environment: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v3
 
+      - name: Set Environment Stage
+        id: set-env-stage
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV; else echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV; fi
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.IAM_ROLE }}
+          role-to-assume: ${{ secrets.IAM_ROLE }} # Corrected line
           role-session-name: GitHubActionsCICDrole
           aws-region: ${{ env.AWS_REGION }}
 

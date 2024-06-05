@@ -1,3 +1,561 @@
+{
+  echo "Directory Structure:";
+  tree;
+  echo "";
+
+  # Print the contents of the workflow files in .github/workflows
+  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the Terraform configuration files
+  find . -type f \( -name "*.tf" -o -name "*.tfvars" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Dockerfiles
+  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Helm chart files
+  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_files.txt
+
+
+================================================================================================================================================================================================================================================
+
+
+
+# ProShop Application Deployment Guide
+
+# Automated CI/CD Pipeline for a Full-Stack Application
+
+This README describes the creation and configuration of an automated CI/CD pipeline using GitHub Actions, Helm, Docker, AWS IAM, and Kubernetes Ingress for an application with both frontend and backend components.
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Prerequisites](#prerequisites)
+3. [Architecture Overview](#architecture-overview)
+4. [GitHub Actions](#github-actions)
+5. [Docker and Amazon ECR](#docker-and-amazon-ecr)
+6. [AWS IAM](#aws-iam)
+7. [Helm](#helm)
+
+## Introduction
+
+This is an automated CI/CD pipeline for a full-stack application. The pipeline leverages GitHub Actions for CI/CD, Docker for containerization, Helm for Kubernetes deployment management, AWS IAM for secure access management, AWS Secrets Manager for credentials, and Kubernetes Ingress for routing and load balancing.
+
+## Prerequisites
+
+Before you begin, ensure you have the following:
+
+- A GitHub account with access to the repository.
+- Docker installed on your local machine.
+- Helm installed on your local machine.
+- AWS CLI installed and configured with appropriate IAM permissions.
+- A Kubernetes cluster (e.g., EKS) with `kubectl` configured to interact with it.
+- Domain names configured according to the specified hostname
+
+## Architecture Overview
+
+The architecture of the pipeline is designed to streamline the deployment process. Here is an overview:
+
+- **Frontend and Backend Repositories:** Separate repositories for frontend and backend code.
+- **GitHub Actions:** Workflows defined to automate build, test, and deployment processes.
+- **Docker:** Containerizes the application for consistency across different environments.
+- **Helm:** Manages Kubernetes manifests and deployment configurations.
+- **AWS IAM:** Secures access to AWS resources.
+- **AWS Secrets:** Stores credentials.
+- **Kubernetes Ingress:** Manages routing and load balancing for the application.
+
+## GitHub Actions
+
+GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of the steps:
+
+### Workflow Files
+
+- `.github/workflows/cicd.yml`: Defines the workflow for the whole application. It includes steps from building and pushing a Docker image to ECR repository to deploying it with helm charts in EKS cluster.
+
+### Key Steps
+
+1. **Checkout Code:** Uses `actions/checkout@v2` to fetch the latest code.
+2. **Build and Test:** Runs the build and test commands for both frontend and backend.
+3. **Docker Build and Push:** Builds Docker images and pushes them to Docker Hub or an AWS ECR repository.
+4. **Deploy with Helm:** Deploys the application to the Kubernetes cluster using Helm. (Not yet)
+
+### Detailed Look Into Workflow File
+
+- **Triggers**: 
+  - The workflow is triggered on pushes to branches matching `feature/**` and `staging`.
+
+- **Permissions**:
+  - The workflow requires specific permissions to assume the AWS IAM role:
+    - `id-token: write`
+    - `contents: read`
+
+- **Environment Variables**:
+  - `AWS_REGION`: Specifies the AWS region (`us-east-1`).
+  - `ENVIRONMENT_STAGE`: Determines the deployment environment based on the branch:
+    - `production` for `main`
+    - `staging` for `staging`
+    - `dev` for all other branches
+
+- **Jobs**:
+  - **proshop-app-build-and-deploy**:
+    - Runs on `ubuntu-latest`.
+    - Uses the appropriate environment based on the branch.
+    - **Steps**:
+      1. **Checkout Branch**:
+         - Uses `actions/checkout@v3` to checkout the branch.
+      2. **Configure AWS Credentials**:
+         - Uses `aws-actions/configure-aws-credentials@v4` to configure AWS credentials with the specified role and region.
+      3. **Login to Amazon ECR**:
+         - Uses `aws-actions/amazon-ecr-login@v2` to login to Amazon ECR.
+      4. **Backend - Build, tag, and push Docker image**:
+         - Builds, tags, and pushes the Docker image for the backend to Amazon ECR.
+         - This step is skipped for the `main` branch.
+      5. **Frontend - Build, tag, and push Docker image**:
+         - Builds, tags, and pushes the Docker image for the frontend to Amazon ECR.
+         - This step is skipped for the `main` branch.
+
+## Docker and Amazon ECR
+
+This project utilizes Docker for containerization and Amazon Elastic Container Registry (ECR) for storing and managing Docker images.
+
+### Docker
+
+Docker is an open platform for developing, shipping, and running applications. Using Docker, we can separate our applications from our infrastructure, ensuring consistency across multiple development and release cycles. Docker allows us to package software into standardized units called containers that include everything the software needs to run, including libraries, dependencies, and configuration files.
+
+### Amazon Elastic Container Registry (ECR)
+
+Amazon ECR is a fully managed Docker container registry that makes it easy to store, manage, and deploy Docker container images. ECR is integrated with Amazon Elastic Container Service (ECS), simplifying the process of managing and deploying containerized applications.
+
+### Workflow with Docker and ECR
+1. **Dockerfile Creation:**
+Define a Dockerfile for frontend and backend specifying the base image, dependencies, and runtime configuration.
+2. **Building and Pushing Docker Images with GitHub Actions**:
+Utilize GitHub Actions workflows to automate the build, tagging, and pushing of Docker images to AWS ECR.
+```yaml
+- name: Backend - Build, tag, and push docker image to Amazon ECR
+  if: github.ref != 'refs/heads/main'
+  env:
+    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    REPOSITORY: proshop-backend
+    IMAGE_TAG: ${{ github.sha }}
+  working-directory: ./backend
+  run: |
+    docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+    docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+- name: Frontend - Build, tag, and push docker image to Amazon ECR
+  if: github.ref != 'refs/heads/main'
+  env:
+    REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    REPOSITORY: proshop-frontend
+    IMAGE_TAG: ${{ github.sha }}
+  working-directory: ./frontend
+  run: |
+    docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+    docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+```
+
+## AWS IAM
+
+To securely integrate AWS services with GitHub Actions, create an IAM role named `GitHubActionsCICDrole`. This role enables GitHub Actions workflows to interact with AWS services like ECR and EKS by establishing a trust relationship using OpenID Connect (OIDC).
+
+### Setup for GitHub Actions
+
+1. **OIDC Identity Provider**:
+   - In AWS IAM, create an OIDC identity provider for GitHub Actions.
+   - Use `https://token.actions.githubusercontent.com` as the provider URL and `sts.amazonaws.com` as the audience.
+
+2. **IAM Role Creation**:
+   - Create the `GitHubActionsCICDrole` with the OIDC provider as the trusted entity.
+   - Define a condition to restrict the role to be assumable only by workflows from your specific GitHub repository, ensuring enhanced security.
+
+3. **Attach Policies**:
+   - Assign necessary permissions to the role for interacting with ECR for Docker image storage and EKS for Kubernetes cluster operations.
+   - Ensure the policies adhere to the principle of least privilege.
+
+### Kubernetes Cluster Access
+
+To grant the `GitHubActionsCICDrole` permissions within your EKS cluster, update the `aws-auth` ConfigMap:
+
+1. **Retrieve the current aws-auth ConfigMap**:
+   ```bash
+   kubectl get configmap/aws-auth -n kube-system -o yaml > aws-auth.yaml
+   ```
+
+2. **Edit the aws-auth.yaml file**:
+   - Add the following snippet under the `mapRoles` section, replacing `<your-aws-account-id>` with your actual AWS account ID:
+   ```yaml
+   - rolearn: arn:aws:iam::<your-aws-account-id>:role/GitHubActionsCICDrole
+     username: github-actions
+     groups:
+       - system:masters
+
+3. **Apply the updated aws-auth ConfigMap**:
+   ```bash
+   kubectl apply -f aws-auth.yaml
+   ```
+
+This configuration establishes a secure link between GitHub Actions and AWS, facilitating seamless CI/CD workflows for deploying and managing your application.
+
+## Helm
+
+Working on it...
+
+
+
+
+
+======================================================================================================================================================
+command for gpt help :
+
+
+{
+  echo "Directory Structure:";
+  tree;
+  echo "";
+
+  # Print the contents of the workflow files in .github/workflows
+  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_workflows.txt
+
+========================================================================================================================
+
+# ProShop eCommerce Platform (v2)
+
+> eCommerce platform built with the MERN stack & Redux.
+
+<img src="./frontend/public/images/screens.png">
+
+This project is part of my [MERN Stack From Scratch | eCommerce Platform](https://www.traversymedia.com/mern-stack-from-scratch) course. It is a full-featured shopping cart with PayPal & credit/debit payments. See it in action at https://www.proshopdemo.dev
+
+This is version 2.0 of the app, which uses Redux Toolkit. The first version can be found [here](https://proshopdemo.dev)
+
+<!-- toc -->
+
+  * [Features](#features)
+  * [Usage](#usage)
+    + [Env Variables](#env-variables)
+    + [Install Dependencies (frontend & backend)](#install-dependencies-frontend--backend)
+    + [Run](#run)
+  * [Build & Deploy](#build--deploy)
+    + [Seed (populate) Database](#seed-database)
+- [Code FAQ](#bug-fixes-corrections-and-code-faq)
+    + [FAQ: How do I use Vite instead of CRA?](#faq-how-do-i-use-vite-instead-of-cra)
+      - [Setting up the proxy](#setting-up-the-proxy)
+      - [Setting up linting](#setting-up-linting)
+      - [Vite outputs the build to /dist](#vite-outputs-the-build-to-dist)
+      - [Vite has a different script to run the dev server](#vite-has-a-different-script-to-run-the-dev-server)
+      - [A final note:](#a-final-note)
+  * [License](#license)
+
+<!-- tocstop -->
+
+## Features
+
+- Full featured shopping cart
+- Product reviews and ratings
+- Top products carousel
+- Product pagination
+- Product search feature
+- User profile with orders
+- Admin product management
+- Admin user management
+- Admin Order details page
+- Mark orders as delivered option
+- Checkout process (shipping, payment method, etc)
+- PayPal / credit card integration
+- Database seeder (populate the database) (products & users)
+
+## Usage
+
+- Create a MongoDB database and obtain your `MongoDB URI` - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+- Create a PayPal account and obtain your `Client ID` - [PayPal Developer](https://developer.paypal.com/)
+
+### Env Variables
+
+Rename the `.env.example` file to `.env` and add the following
+
+```
+PORT=5000
+MONGO_URI=<your_mongo_db_uri>
+JWT_SECRET='abc123'
+PAYPAL_CLIENT_ID=<your_paypal_client_id>
+PAYPAL_APP_SECRET=<your_paypal_secret>
+PAYPAL_API_URL=https://api-m.sandbox.paypal.com
+PAGINATION_LIMIT=8
+```
+
+![Alt text](<static/documentdb_connection.png>)
+
+Change the JWT_SECRET and PAGINATION_LIMIT to what you want
+
+### Note
+
+- If you don't plan to use credit card feature or just don't want to create paypal account etc. you can just leave paypal env variables as they are.
+
+### Install Dependencies (frontend & backend)
+
+```
+npm install
+cd frontend
+npm install
+```
+
+### Run
+
+```
+
+# Run frontend (:3000) & backend (:5000)
+npm run dev
+
+# Run backend only
+npm run server
+```
+
+## Build & Deploy
+
+```
+# Create frontend prod build
+cd frontend
+npm run build
+```
+
+### Seed (populate) Database
+
+You can use the following commands to seed the database with some sample users and products as well as destroy all data
+
+```
+# Import data
+npm run data:import
+
+# Destroy data
+npm run data:destroy
+```
+
+```
+Sample User Logins
+
+admin@email.com (Admin)
+123456
+
+john@email.com (Customer)
+123456
+
+jane@email.com (Customer)
+123456
+```
+
+---
+
+<!-- # Code FAQ -->
+
+### FAQ: How do I use Vite instead of CRA?
+
+Ok so you're at **Section 1 - Starting The Frontend** in the course and you've
+heard cool things about [Vite](https://vitejs.dev/) and why you should use that
+instead of [Create React App](https://create-react-app.dev/) in 2023.
+
+There are a few differences you need to be aware of using Vite in place of CRA
+here in the course after [scaffolding out your Vite React app](https://github.com/vitejs/vite/tree/main/packages/create-vite#create-vite)
+
+#### Setting up the proxy
+
+Using CRA we have a `"proxy"` setting in our frontend/package.json to avoid
+breaking the browser [Same Origin Policy](https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy) in development.
+In Vite we have to set up our proxy in our
+[vite.config.js](https://vitejs.dev/config/server-options.html#server-proxy).
+
+```js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    // proxy requests prefixed '/api' and '/uploads'
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/uploads': 'http://localhost:5000',
+    },
+  },
+});
+```
+
+#### Setting up linting
+
+By default CRA outputs linting from eslint to your terminal and browser console.
+To get Vite to ouput linting to the terminal you need to add a [plugin](https://www.npmjs.com/package/vite-plugin-eslint) as a
+development dependency...
+
+```bash
+npm i -D vite-plugin-eslint
+
+```
+
+Then add the plugin to your **vite.config.js**
+
+```js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+// import the plugin
+import eslintPlugin from 'vite-plugin-eslint';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    eslintPlugin({
+      // setup the plugin
+      cache: false,
+      include: ['./src/**/*.js', './src/**/*.jsx'],
+      exclude: [],
+    }),
+  ],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/uploads': 'http://localhost:5000',
+    },
+  },
+});
+```
+
+By default the eslint config that comes with a Vite React project treats some
+rules from React as errors which will break your app if you are following Brad exactly.
+You can change those rules to give a warning instead of an error by modifying
+the **eslintrc.cjs** that came with your Vite project.
+
+```js
+module.exports = {
+  env: { browser: true, es2020: true },
+  extends: [
+    'eslint:recommended',
+    'plugin:react/recommended',
+    'plugin:react/jsx-runtime',
+    'plugin:react-hooks/recommended',
+  ],
+  parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+  settings: { react: { version: '18.2' } },
+  plugins: ['react-refresh'],
+  rules: {
+    // turn this one off
+    'react/prop-types': 'off',
+    // change these errors to warnings
+    'react-refresh/only-export-components': 'warn',
+    'no-unused-vars': 'warn',
+  },
+};
+```
+
+#### Vite outputs the build to /dist
+
+Create React App by default outputs the build to a **/build** directory and this is
+what we serve from our backend in production.  
+Vite by default outputs the build to a **/dist** directory so we need to make
+some adjustments to our [backend/server.js](./backend/server.js)
+Change...
+
+```js
+app.use(express.static(path.join(__dirname, '/frontend/build')));
+```
+
+to...
+
+```js
+app.use(express.static(path.join(__dirname, '/frontend/dist')));
+```
+
+and...
+
+```js
+app.get('*', (req, res) =>
+  res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'))
+);
+```
+
+to...
+
+```js
+app.get('*', (req, res) =>
+  res.sendFile(path.resolve(__dirname, 'frontend', 'dist', 'index.html'))
+);
+```
+
+#### Vite has a different script to run the dev server
+
+In a CRA project you run `npm start` to run the development server, in Vite you
+start the development server with `npm run dev`  
+If you are using the **dev** script in your root pacakge.json to run the project
+using concurrently, then you will also need to change your root package.json
+scripts from...
+
+```json
+    "client": "npm start --prefix frontend",
+```
+
+to...
+
+```json
+    "client": "npm run dev --prefix frontend",
+```
+
+Or you can if you wish change the frontend/package.json scripts to use `npm
+start`...
+
+```json
+    "start": "vite",
+```
+
+#### A final note:
+
+Vite requires you to name React component files using the `.jsx` file
+type, so you won't be able to use `.js` for your components. The entry point to
+your app will be in `main.jsx` instead of `index.js`
+
+And that's it! You should be good to go with the course using Vite.
+
+---
+
+## License
+
+The MIT License
+
+Copyright (c) 2023 Traversy Media https://traversymedia.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+
+
+
+
+
+
+==========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
+
+
+
+
+
+previous readme ::: 
+
+
+
 my ticket : 
 
 ticket 13 
@@ -979,7 +1537,6 @@ Directory Structure:
 └── uploads
 
 22 directories, 90 files
-
 
 
 

@@ -16,6 +16,7 @@ env:
 jobs:
   proshop-app-build-and-deploy:
     runs-on: ubuntu-latest
+    environment: dev  # Add the environment context
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v3
@@ -28,7 +29,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.IAM_ROLE }} # Corrected line
+          role-to-assume: ${{ vars.IAM_ROLE }} # Use vars.IAM_ROLE to access the environment variable
           role-session-name: GitHubActionsCICDrole
           aws-region: ${{ env.AWS_REGION }}
 
@@ -57,3 +58,15 @@ jobs:
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+      - name: Deploy Backend with Helm
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install backend ./helm/backend -f ./helm/backend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
+
+      - name: Deploy Frontend with Helm
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install frontend ./helm/frontend -f ./helm/frontend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace

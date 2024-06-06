@@ -15,7 +15,7 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
   hosts:
-    - host: shop-ubuntu-dev.312ubuntu.com
+    - host: shop-centos-dev.312centos.com
       paths:
         - path: /
           pathType: ImplementationSpecific

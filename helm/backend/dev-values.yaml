@@ -7,11 +7,11 @@ service:
 ingress:
   enabled: true
   hosts:
-    - host: shop-ubuntu-dev.312ubuntu.com
+    - host: shop-centos-dev.312ubuntu.com
       paths:
         - path: /
           pathType: ImplementationSpecific
   tls:
     - secretName: backend-tls
       hosts:
-        - shop-ubuntu-dev.312ubuntu.com
+        - shop-centos-dev.312centos.com

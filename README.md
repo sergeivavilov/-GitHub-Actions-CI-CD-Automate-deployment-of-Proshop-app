@@ -56,7 +56,7 @@ Before you begin, ensure you have the following:
 
 The architecture of the pipeline is designed to streamline the deployment process. Here is an overview:
 
-- **Frontend and Backend Repositories:** Separate repositories for frontend and backend code.
+- **Frontend and Backend Repositories:** Separate folders for frontend and backend code.
 - **GitHub Actions:** Workflows defined to automate build, test, and deployment processes.
 - **Docker:** Containerizes the application for consistency across different environments.
 - **Helm:** Manages Kubernetes manifests and deployment configurations.
@@ -74,7 +74,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 
 ### Key Steps
 
-1. **Checkout Code:** Uses `actions/checkout@v2` to fetch the latest code.
+1. **Checkout Code:** Uses `actions/checkout@v3` to fetch the latest code.
 2. **Build and Test:** Runs the build and test commands for both frontend and backend.
 3. **Docker Build and Push:** Builds Docker images and pushes them to Docker Hub or an AWS ECR repository.
 4. **Deploy with Helm:** Deploys the application to the Kubernetes cluster using Helm. (Not yet)
@@ -82,7 +82,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 ### Detailed Look Into Workflow File
 
 - **Triggers**: 
-  - The workflow is triggered on pushes to branches matching `feature/**` and `staging`.
+  - The workflow is triggered on pushes to branches matching `feature/**`.
 
 - **Permissions**:
   - The workflow requires specific permissions to assume the AWS IAM role:

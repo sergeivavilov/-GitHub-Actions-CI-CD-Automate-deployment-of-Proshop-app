@@ -1,0 +1,5 @@
+apiVersion: v2
+name: Helm Chart
+description: proshop app helm chart
+type: application
+version: 0.1.0

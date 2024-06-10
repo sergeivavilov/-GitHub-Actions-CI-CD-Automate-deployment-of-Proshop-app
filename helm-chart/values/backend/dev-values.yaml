@@ -1,0 +1,28 @@
+replicaCount: 1
+port: 5000
+servicePort: 5000
+serviceProtocol: TCP
+appName: proshop-backend
+hostName: shop-centos-api-dev.312centos.com
+ingress:
+  enabled: true
+  tls:
+    enabled: true
+    secretName: 312centos-dev.com-tls
+appNamespace: shop-app-dev
+serviceAccount: proshop-app-backend-sa
+awsSecrets:
+  enabled: true
+  secretProviderClassName: "proshop-backend-aws-secrets"
+  k8sSecretName: "proshop-db-credentials"
+  awsSecretName: "mongo_db_secret"
+  secretKeys:
+    - key: "mongo_db_uri"
+appConfig:
+  envVars:
+    - name: NODE_ENV
+      value: "development"
+  secrets:
+    - name: MONGO_URI
+      secretName: proshop-db-credentials
+      key: "mongo_db_uri"

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.appName }}-svc"
+  namespace: {{ .Values.appNamespace }}
+spec:
+  selector:
+    app: {{ .Values.appName }}
+  ports:
+    - protocol: {{ .Values.serviceProtocol }}
+      port: {{ .Values.servicePort }}
+      targetPort: {{ .Values.port }}
+---
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "{{ .Values.appName}}-ingress"
+  namespace: {{ .Values.appNamespace }}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: {{ .Values.hostName}}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: "{{ .Values.appName }}-svc"
+            port:
+              number: {{ .Values.servicePort }}
+  ingressClassName: nginx
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+      - {{ .Values.hostName }}
+    secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+{{- end }}

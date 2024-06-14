@@ -13,6 +13,9 @@ This README describes the creation and configuration of an automated CI/CD pipel
 5. [Docker and Amazon ECR](#docker-and-amazon-ecr)
 6. [AWS IAM](#aws-iam)
 7. [Helm](#helm)
+8. [Backend and Frontend deployment](#backend-and-frontend-deployment)
+9. [Secrets Management](#secrets-management)
+10. [Ingress configuration and TLS](#ingress-configuration-and-tls)
 
 ## Introduction
 
@@ -176,12 +179,177 @@ This configuration establishes a secure link between GitHub Actions and AWS, fac
 
 ## Helm
 
-Working on it...
+Helm charts are instrumental in packaging and deploying Kubernetes applications. For the ProShop application, Helm charts enable the deployment of its frontend and backend components separately, ensuring independent scaling, updating, and management. This section provides insights into configuring these charts and using Helm values to customize deployments for various environments.
 
+### Helm Chart Structure
 
+A typical Helm chart includes the following key components:
 
+- **Chart.yaml**: Contains metadata such as the chart's version, name, and description.
+- **values**: Directory contains backend and frontend values files.
+- **values.yaml**: Stores configuration values, which can be used to create resources. This repo includes specific environment values files like dev-values.yaml, staging-values.yaml, and prod-values.yaml.
+- **templates/**: A directory for Kubernetes resource templates populated with values from values.yaml.
 
+### Example Values File Snippets
 
+The values.yaml files define the deployment configurations for different environments. Below are example values files for a hypothetical development environment for both frontend and backend applications.
+
+**Frontend dev-values.yaml Example:**
+
+```yaml
+replicaCount: 1
+port: 3000
+servicePort: 3000
+serviceProtocol: TCP
+appName: proshop-frontend
+hostName: shop-centos-dev.312centos.com
+ingress:
+  enabled: true
+  tls:
+    enabled: true
+    secretName: 312centos-dev.com-tls
+appNamespace: shop-app-dev
+serviceAccount: default
+awsSecrets:
+  enabled: false
+appConfig:
+  envVars:
+    - name: DANGEROUSLY_DISABLE_HOST_CHECK
+      value: "true"
+  secrets: []
+```
+
+### Environment-Specific Values
+
+The project structure supports potential future expansions to staging and production environments by maintaining separate values files for each (e.g., dev-values.yaml, staging-values.yaml, prod-values.yaml). This allows for environment-specific configurations such as replica counts, image tags, and hostnames.
+
+## Backend and Frontend deployment
+
+The deployment process is automated through GitHub Actions workflows, triggered by code pushes. These workflows build Docker images, tag them appropriately, and deploy the application using Helm charts. The deployment steps for the backend and frontend are specified in the workflow, incorporating environment-specific configurations and dynamic image tagging.
+
+#### Deployment steps
+
+Example:
+
+```yaml
+- name: Frontend - Deploy to Kubernetes
+  env:
+    SEMANTIC_TAG: "v1.0.1"
+  run: |
+    IMAGE_TAG=${{ github.ref == 'refs/heads/main' && env.SEMANTIC_TAG || github.sha }}
+    helm upgrade --install proshop-app-frontend ./helm-chart \
+      --values ./helm-chart/values/frontend/${{ env.ENVIRONMENT_STAGE }}-values.yaml \
+      --namespace shop-app --create-namespace \
+      --set image.tag="$IMAGE_TAG"
+```
+
+The deployment process leverages different values.yaml files for each environment (development, staging, production), located in respective directories within the helm-chart/values folder. It allows each environment to have different configuration of the same app, allowing, for example easy testing.
+
+By integrating Helm deployments into the GitHub Actions workflow, the ProShop application achieves automated, consistent, and environment-specific deployments, significantly enhancing the CI/CD pipeline's efficiency and reliability.
+
+## Secrets Management
+
+Because the backend needs access to a database, we need to somehow add database credentials into the code. Credentials are sensitive data, so we want to do it as securely as possible. This section will provide guideline on it. Following this guideline it is not only possible to secure the database connectivity by centralizing secret management in AWS Secrets Manager, but also ensure seamless integration with the Kubernetes-deployed applications.
+
+#### Integration of AWS Secrets with Kubernetes
+
+AWS Secrets Manager and Config Provider (ASCP) enables Kubernetes to utilize secrets stored in AWS Secrets Manager. Follow these steps for integration:
+
+1. **Install ASCP in Your EKS Cluster**:
+   Deploy AWS Secrets Manager and Config Provider within your EKS cluster via Helm.
+
+2. **Set Up OIDC Identity Provider for EKS**:
+   Configure an OIDC Identity Provider for your EKS cluster to establish trust relationships between AWS IAM roles and Kubernetes service accounts.
+
+3. **Create IAM Role and Kubernetes Service Account**:
+   Create an IAM role with permissions to access AWS Secrets Manager and associate it with a Kubernetes service account.
+
+4. **Configure the SecretProviderClass**:
+
+   ```yaml
+   apiVersion: secrets-store.csi.x-k8s.io/v1
+   kind: SecretProviderClass
+   metadata:
+     name: my-secret
+   spec:
+     provider: aws
+     parameters:
+       objects: |
+         - objectName: "MySecret"
+           objectType: "secretsmanager"
+
+5. **Reference the Secret in the Deployment**:
+
+```yaml
+# Create secret-based ENV variables from AWS Secrets Manager
+        {{- range .Values.appConfig.secrets }}
+        - name: {{ .name }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .secretName }}  # Name of Kubernetes secret created by AWS Secrets Manager and SecretProviderClass
+              key: {{ .key }}  # Specific key within the secret
+        {{- end }}
+
+```
+
+Useful Resource that can help to integrate AWS Secrets with Kubernetes: [AWS EKS & Secrets Manager (File & Env | Kubernetes | Secrets Store CSI Driver | K8s)](https://www.youtube.com/watch?v=Rmgo6vCytsg).
+
+## Ingress configuration and TLS
+
+Ingress exposes HTTP and HTTPS routes from outside the cluster to services within the cluster. Traffic routing is controlled by rules defined on the Ingress resource. This section outlines the process of setting up Ingress resources, leveraging annotations for dynamic DNS record management, and securing your application with TLS encryption.
+
+### Ingress Setup
+
+1. **Ingress Controller**: You must have an Ingress controller to satisfy an Ingress. Only creating an Ingress resource has no effect. You may need to deploy an Ingress controller such as ingress-nginx. Here is the [official installation guide](https://kubernetes.github.io/ingress-nginx/deploy/#aws) for AWS deployment.
+
+2. **Defining Ingress Resources**: Define Ingress rules to route external HTTP(S) traffic to the correct services within your cluster. Below is an example Ingress resource using NGINX as the Ingress controller, with annotations for dynamic DNS configuration:
+
+   ```yaml
+   {{- if .Values.ingress.enabled }}
+   apiVersion: networking.k8s.io/v1
+   kind: Ingress
+   metadata:
+     name: "{{ .Values.appName }}-ingress"
+     namespace: "{{ .Values.appNamespace }}"
+     annotations:
+       kubernetes.io/ingress.class: "nginx"
+   spec:
+     rules:
+     - host: "<your-application-domain>"
+       http:
+         paths:
+         - path: "/"
+           pathType: Prefix
+           backend:
+             service:
+               name: "<your-service-name>"
+               port:
+                 number: <your-service-port>
+   {{- end }}
+   ```
+
+### TLS Configuration
+You can secure an Ingress by specifying a Secret that contains a TLS private key and certificate. The Ingress resource only supports a single TLS port, 443. It is essential to protect data in transit and ensure the confidentiality and integrity of the data between client and the server.
+
+1. **Certificate Management**: Cert-manager is a native Kubernetes certificate management controller. It can help with issuing certificates from a variety of sources, such as Let's Encrypt, HashiCorp Vault, Venafi, a simple signing key pair, or self signed. 
+
+Let's Encrypt is a nonprofit Certificate Authority that provides TLS certificates to 300 million websites.
+
+Alternatively, if you have an existing wildcard certificate that matches your domain naming scheme, you can also use that.
+
+2. **Incorporating TLS in Ingress**: Modify your Ingress resource to include TLS settings, referencing the Kubernetes Secret that stores your TLS certificate and private key.
+
+Example:
+```yaml
+spec:
+  tls:
+  - hosts:
+      - https-example.foo.com
+    secretName: testsecret-tls
+  ...
+  ```
+
+Note: The secretName should refer to a Kubernetes Secret that contains your TLS certificate (tls.crt) and private key (tls.key). Referencing this secret in an Ingress tells the Ingress controller to secure the channel from the client to the load balancer using TLS. The secret should be in the same namespace as an ingress resource.
 
 ==========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
 

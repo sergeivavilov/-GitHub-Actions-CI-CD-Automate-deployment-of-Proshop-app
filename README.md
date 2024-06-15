@@ -1,24 +1,3 @@
-{
-  echo "Directory Structure:";
-  tree;
-  echo "";
-
-  # Print the contents of the workflow files in .github/workflows
-  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of the Terraform configuration files
-  find . -type f \( -name "*.tf" -o -name "*.tfvars" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of Dockerfiles
-  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of Helm chart files
-  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-} > tree_and_files.txt
-
-
-================================================================================================================================================================================================================================================
-
 
 
 # ProShop Application Deployment Guide
@@ -402,9 +381,6 @@ Note: The secretName should refer to a Kubernetes Secret that contains your TLS 
 
 
 ======================================================================================================================================================
-command for gpt help :
-
-
 {
   echo "Directory Structure:";
   tree;
@@ -412,7 +388,24 @@ command for gpt help :
 
   # Print the contents of the workflow files in .github/workflows
   find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-} > tree_and_workflows.txt
+
+  # Print the contents of Dockerfiles
+  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of backend and frontend YAML files
+  find ./backend -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+  find ./frontend -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the AWS authentication files
+  find . -type f -name "aws.auth" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Helm chart files
+  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the helm-chart folder files
+  find ./helm-chart -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_files.txt
+
 
 ========================================================================================================================
 

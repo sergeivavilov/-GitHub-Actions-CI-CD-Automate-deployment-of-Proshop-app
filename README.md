@@ -1,3 +1,26 @@
+{
+  echo "Directory Structure:";
+  tree;
+  echo "";
+
+  # Print the contents of the workflow files in .github/workflows
+  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the Terraform configuration files
+  find . -type f \( -name "*.tf" -o -name "*.tfvars" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Dockerfiles
+  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Helm chart files
+  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_files.txt
+
+
+================================================================================================================================================================================================================================================
+
+
+
 # ProShop Application Deployment Guide
 
 # Automated CI/CD Pipeline for a Full-Stack Application
@@ -13,9 +36,6 @@ This README describes the creation and configuration of an automated CI/CD pipel
 5. [Docker and Amazon ECR](#docker-and-amazon-ecr)
 6. [AWS IAM](#aws-iam)
 7. [Helm](#helm)
-8. [Backend and Frontend deployment](#backend-and-frontend-deployment)
-9. [Secrets Management](#secrets-management)
-10. [Ingress configuration and TLS](#ingress-configuration-and-tls)
 
 ## Introduction
 
@@ -36,7 +56,7 @@ Before you begin, ensure you have the following:
 
 The architecture of the pipeline is designed to streamline the deployment process. Here is an overview:
 
-- **Frontend and Backend Repositories:** Separate repositories for frontend and backend code.
+- **Frontend and Backend Repositories:** Separate folders for frontend and backend code.
 - **GitHub Actions:** Workflows defined to automate build, test, and deployment processes.
 - **Docker:** Containerizes the application for consistency across different environments.
 - **Helm:** Manages Kubernetes manifests and deployment configurations.
@@ -54,7 +74,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 
 ### Key Steps
 
-1. **Checkout Code:** Uses `actions/checkout@v2` to fetch the latest code.
+1. **Checkout Code:** Uses `actions/checkout@v3` to fetch the latest code.
 2. **Build and Test:** Runs the build and test commands for both frontend and backend.
 3. **Docker Build and Push:** Builds Docker images and pushes them to Docker Hub or an AWS ECR repository.
 4. **Deploy with Helm:** Deploys the application to the Kubernetes cluster using Helm. (Not yet)
@@ -62,7 +82,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 ### Detailed Look Into Workflow File
 
 - **Triggers**: 
-  - The workflow is triggered on pushes to branches matching `feature/**` and `staging`.
+  - The workflow is triggered on pushes to branches matching `feature/**`.
 
 - **Permissions**:
   - The workflow requires specific permissions to assume the AWS IAM role:
@@ -181,6 +201,7 @@ This configuration establishes a secure link between GitHub Actions and AWS, fac
 
 Helm charts are instrumental in packaging and deploying Kubernetes applications. For the ProShop application, Helm charts enable the deployment of its frontend and backend components separately, ensuring independent scaling, updating, and management. This section provides insights into configuring these charts and using Helm values to customize deployments for various environments.
 
+
 ### Helm Chart Structure
 
 A typical Helm chart includes the following key components:
@@ -190,9 +211,12 @@ A typical Helm chart includes the following key components:
 - **values.yaml**: Stores configuration values, which can be used to create resources. This repo includes specific environment values files like dev-values.yaml, staging-values.yaml, and prod-values.yaml.
 - **templates/**: A directory for Kubernetes resource templates populated with values from values.yaml.
 
+
+
 ### Example Values File Snippets
 
 The values.yaml files define the deployment configurations for different environments. Below are example values files for a hypothetical development environment for both frontend and backend applications.
+
 
 **Frontend dev-values.yaml Example:**
 
@@ -219,13 +243,16 @@ appConfig:
   secrets: []
 ```
 
+
 ### Environment-Specific Values
 
 The project structure supports potential future expansions to staging and production environments by maintaining separate values files for each (e.g., dev-values.yaml, staging-values.yaml, prod-values.yaml). This allows for environment-specific configurations such as replica counts, image tags, and hostnames.
 
+
 ## Backend and Frontend deployment
 
 The deployment process is automated through GitHub Actions workflows, triggered by code pushes. These workflows build Docker images, tag them appropriately, and deploy the application using Helm charts. The deployment steps for the backend and frontend are specified in the workflow, incorporating environment-specific configurations and dynamic image tagging.
+
 
 #### Deployment steps
 
@@ -247,9 +274,11 @@ The deployment process leverages different values.yaml files for each environmen
 
 By integrating Helm deployments into the GitHub Actions workflow, the ProShop application achieves automated, consistent, and environment-specific deployments, significantly enhancing the CI/CD pipeline's efficiency and reliability.
 
+
 ## Secrets Management
 
 Because the backend needs access to a database, we need to somehow add database credentials into the code. Credentials are sensitive data, so we want to do it as securely as possible. This section will provide guideline on it. Following this guideline it is not only possible to secure the database connectivity by centralizing secret management in AWS Secrets Manager, but also ensure seamless integration with the Kubernetes-deployed applications.
+
 
 #### Integration of AWS Secrets with Kubernetes
 
@@ -278,6 +307,7 @@ AWS Secrets Manager and Config Provider (ASCP) enables Kubernetes to utilize sec
          - objectName: "MySecret"
            objectType: "secretsmanager"
 
+
 5. **Reference the Secret in the Deployment**:
 
 ```yaml
@@ -293,6 +323,7 @@ AWS Secrets Manager and Config Provider (ASCP) enables Kubernetes to utilize sec
 ```
 
 Useful Resource that can help to integrate AWS Secrets with Kubernetes: [AWS EKS & Secrets Manager (File & Env | Kubernetes | Secrets Store CSI Driver | K8s)](https://www.youtube.com/watch?v=Rmgo6vCytsg).
+
 
 ## Ingress configuration and TLS
 
@@ -337,6 +368,7 @@ Let's Encrypt is a nonprofit Certificate Authority that provides TLS certificate
 
 Alternatively, if you have an existing wildcard certificate that matches your domain naming scheme, you can also use that.
 
+
 2. **Incorporating TLS in Ingress**: Modify your Ingress resource to include TLS settings, referencing the Kubernetes Secret that stores your TLS certificate and private key.
 
 Example:
@@ -351,7 +383,374 @@ spec:
 
 Note: The secretName should refer to a Kubernetes Secret that contains your TLS certificate (tls.crt) and private key (tls.key). Referencing this secret in an Ingress tells the Ingress controller to secure the channel from the client to the load balancer using TLS. The secret should be in the same namespace as an ingress resource.
 
-==========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================================================================================================
+command for gpt help :
+
+
+{
+  echo "Directory Structure:";
+  tree;
+  echo "";
+
+  # Print the contents of the workflow files in .github/workflows
+  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_workflows.txt
+
+========================================================================================================================
+
+# ProShop eCommerce Platform (v2)
+
+> eCommerce platform built with the MERN stack & Redux.
+
+<img src="./frontend/public/images/screens.png">
+
+This project is part of my [MERN Stack From Scratch | eCommerce Platform](https://www.traversymedia.com/mern-stack-from-scratch) course. It is a full-featured shopping cart with PayPal & credit/debit payments. See it in action at https://www.proshopdemo.dev
+
+This is version 2.0 of the app, which uses Redux Toolkit. The first version can be found [here](https://proshopdemo.dev)
+
+<!-- toc -->
+
+  * [Features](#features)
+  * [Usage](#usage)
+    + [Env Variables](#env-variables)
+    + [Install Dependencies (frontend & backend)](#install-dependencies-frontend--backend)
+    + [Run](#run)
+  * [Build & Deploy](#build--deploy)
+    + [Seed (populate) Database](#seed-database)
+- [Code FAQ](#bug-fixes-corrections-and-code-faq)
+    + [FAQ: How do I use Vite instead of CRA?](#faq-how-do-i-use-vite-instead-of-cra)
+      - [Setting up the proxy](#setting-up-the-proxy)
+      - [Setting up linting](#setting-up-linting)
+      - [Vite outputs the build to /dist](#vite-outputs-the-build-to-dist)
+      - [Vite has a different script to run the dev server](#vite-has-a-different-script-to-run-the-dev-server)
+      - [A final note:](#a-final-note)
+  * [License](#license)
+
+<!-- tocstop -->
+
+## Features
+
+- Full featured shopping cart
+- Product reviews and ratings
+- Top products carousel
+- Product pagination
+- Product search feature
+- User profile with orders
+- Admin product management
+- Admin user management
+- Admin Order details page
+- Mark orders as delivered option
+- Checkout process (shipping, payment method, etc)
+- PayPal / credit card integration
+- Database seeder (populate the database) (products & users)
+
+## Usage
+
+- Create a MongoDB database and obtain your `MongoDB URI` - [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register)
+- Create a PayPal account and obtain your `Client ID` - [PayPal Developer](https://developer.paypal.com/)
+
+### Env Variables
+
+Rename the `.env.example` file to `.env` and add the following
+
+```
+PORT=5000
+MONGO_URI=<your_mongo_db_uri>
+JWT_SECRET='abc123'
+PAYPAL_CLIENT_ID=<your_paypal_client_id>
+PAYPAL_APP_SECRET=<your_paypal_secret>
+PAYPAL_API_URL=https://api-m.sandbox.paypal.com
+PAGINATION_LIMIT=8
+```
+
+![Alt text](<static/documentdb_connection.png>)
+
+Change the JWT_SECRET and PAGINATION_LIMIT to what you want
+
+### Note
+
+- If you don't plan to use credit card feature or just don't want to create paypal account etc. you can just leave paypal env variables as they are.
+
+### Install Dependencies (frontend & backend)
+
+```
+npm install
+cd frontend
+npm install
+```
+
+### Run
+
+```
+
+# Run frontend (:3000) & backend (:5000)
+npm run dev
+
+# Run backend only
+npm run server
+```
+
+## Build & Deploy
+
+```
+# Create frontend prod build
+cd frontend
+npm run build
+```
+
+### Seed (populate) Database
+
+You can use the following commands to seed the database with some sample users and products as well as destroy all data
+
+```
+# Import data
+npm run data:import
+
+# Destroy data
+npm run data:destroy
+```
+
+```
+Sample User Logins
+
+admin@email.com (Admin)
+123456
+
+john@email.com (Customer)
+123456
+
+jane@email.com (Customer)
+123456
+```
+
+---
+
+<!-- # Code FAQ -->
+
+### FAQ: How do I use Vite instead of CRA?
+
+Ok so you're at **Section 1 - Starting The Frontend** in the course and you've
+heard cool things about [Vite](https://vitejs.dev/) and why you should use that
+instead of [Create React App](https://create-react-app.dev/) in 2023.
+
+There are a few differences you need to be aware of using Vite in place of CRA
+here in the course after [scaffolding out your Vite React app](https://github.com/vitejs/vite/tree/main/packages/create-vite#create-vite)
+
+#### Setting up the proxy
+
+Using CRA we have a `"proxy"` setting in our frontend/package.json to avoid
+breaking the browser [Same Origin Policy](https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy) in development.
+In Vite we have to set up our proxy in our
+[vite.config.js](https://vitejs.dev/config/server-options.html#server-proxy).
+
+```js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    // proxy requests prefixed '/api' and '/uploads'
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/uploads': 'http://localhost:5000',
+    },
+  },
+});
+```
+
+#### Setting up linting
+
+By default CRA outputs linting from eslint to your terminal and browser console.
+To get Vite to ouput linting to the terminal you need to add a [plugin](https://www.npmjs.com/package/vite-plugin-eslint) as a
+development dependency...
+
+```bash
+npm i -D vite-plugin-eslint
+
+```
+
+Then add the plugin to your **vite.config.js**
+
+```js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+// import the plugin
+import eslintPlugin from 'vite-plugin-eslint';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    eslintPlugin({
+      // setup the plugin
+      cache: false,
+      include: ['./src/**/*.js', './src/**/*.jsx'],
+      exclude: [],
+    }),
+  ],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/uploads': 'http://localhost:5000',
+    },
+  },
+});
+```
+
+By default the eslint config that comes with a Vite React project treats some
+rules from React as errors which will break your app if you are following Brad exactly.
+You can change those rules to give a warning instead of an error by modifying
+the **eslintrc.cjs** that came with your Vite project.
+
+```js
+module.exports = {
+  env: { browser: true, es2020: true },
+  extends: [
+    'eslint:recommended',
+    'plugin:react/recommended',
+    'plugin:react/jsx-runtime',
+    'plugin:react-hooks/recommended',
+  ],
+  parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+  settings: { react: { version: '18.2' } },
+  plugins: ['react-refresh'],
+  rules: {
+    // turn this one off
+    'react/prop-types': 'off',
+    // change these errors to warnings
+    'react-refresh/only-export-components': 'warn',
+    'no-unused-vars': 'warn',
+  },
+};
+```
+
+#### Vite outputs the build to /dist
+
+Create React App by default outputs the build to a **/build** directory and this is
+what we serve from our backend in production.  
+Vite by default outputs the build to a **/dist** directory so we need to make
+some adjustments to our [backend/server.js](./backend/server.js)
+Change...
+
+```js
+app.use(express.static(path.join(__dirname, '/frontend/build')));
+```
+
+to...
+
+```js
+app.use(express.static(path.join(__dirname, '/frontend/dist')));
+```
+
+and...
+
+```js
+app.get('*', (req, res) =>
+  res.sendFile(path.resolve(__dirname, 'frontend', 'build', 'index.html'))
+);
+```
+
+to...
+
+```js
+app.get('*', (req, res) =>
+  res.sendFile(path.resolve(__dirname, 'frontend', 'dist', 'index.html'))
+);
+```
+
+#### Vite has a different script to run the dev server
+
+In a CRA project you run `npm start` to run the development server, in Vite you
+start the development server with `npm run dev`  
+If you are using the **dev** script in your root pacakge.json to run the project
+using concurrently, then you will also need to change your root package.json
+scripts from...
+
+```json
+    "client": "npm start --prefix frontend",
+```
+
+to...
+
+```json
+    "client": "npm run dev --prefix frontend",
+```
+
+Or you can if you wish change the frontend/package.json scripts to use `npm
+start`...
+
+```json
+    "start": "vite",
+```
+
+#### A final note:
+
+Vite requires you to name React component files using the `.jsx` file
+type, so you won't be able to use `.js` for your components. The entry point to
+your app will be in `main.jsx` instead of `index.js`
+
+And that's it! You should be good to go with the course using Vite.
+
+---
+
+## License
+
+The MIT License
+
+Copyright (c) 2023 Traversy Media https://traversymedia.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+
+
+
+
+
+
+==========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================
+
+
+
+
+
+previous readme ::: 
+
+
 
 my ticket : 
 
@@ -1334,10 +1733,6 @@ Directory Structure:
 └── uploads
 
 22 directories, 90 files
-
-
-
-
 
 
 

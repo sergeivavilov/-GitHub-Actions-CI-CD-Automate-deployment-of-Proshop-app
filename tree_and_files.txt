@@ -2,6 +2,7 @@ Directory Structure:
 .
 ├── Dockerfile
 ├── README.md
+├── aws-auth.yaml
 ├── backend
 │   ├── config
 │   │   └── db.js
@@ -106,70 +107,47 @@ Directory Structure:
 │       ├── store.js
 │       └── utils
 │           └── cartUtils.js
-├── helm-chart
-│   ├── Chart.yaml
-│   ├── templates
-│   │   ├── deployment.yaml
-│   │   ├── ingress.yaml
-│   │   └── secret-provisioner.yaml
-│   └── values
-│       ├── backend
-│       │   ├── dev-values.yaml
-│       │   ├── prod-values.yaml
-│       │   └── staging-values.yaml
-│       └── frontend
-│           ├── dev-values.yaml
-│           ├── prod-values.yaml
-│           └── staging-values.yaml
+├── helm
+│   ├── backend
+│   │   ├── Chart.yaml
+│   │   ├── dev-values.yaml
+│   │   ├── templates
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   └── values.yaml
+│   └── frontend
+│       ├── Chart.yaml
+│       ├── dev-values.yaml
+│       ├── templates
+│       │   ├── deployment.yaml
+│       │   └── service.yaml
+│       └── values.yaml
 ├── package-lock.json
 ├── package.json
 ├── pnpm-lock.yaml
 ├── static
 │   └── documentdb_connection.png
+├── terraform
+│   ├── dev.tfvars
+│   ├── main.tf
+│   ├── production.tfvars
+│   ├── staging.tfvars
+│   └── variables.tf
 ├── tree_and_files.txt
 └── uploads
 
-27 directories, 102 files
+28 directories, 108 files
 
 .github/workflows/cicd.yaml
 Contents of .github/workflows/cicd.yaml:
-#resolved but have error : 
-
-# Backend - Build, tag, and push docker image to Amazon ECR
-
-# 10 naming to 036692858685.dkr.ecr.us-east-1.amazonaws.com/proshop-backend:10c695d5f7e667802254f8511a742c52380ccf1d done
-# 10 DONE 5.9s
-# The push refers to repository [036692858685.dkr.ecr.us-east-1.amazonaws.com/proshop-backend]
-# a59f8edde95e: Preparing
-# a6966e7266fc: Preparing
-# cc869e60d0bb: Preparing
-# dfa25be46153: Preparing
-# be322b479aee: Preparing
-# d41bcd3a037b: Preparing
-# fe0d845e767b: Preparing
-# f25ec1d93a58: Preparing
-# 794ce8b1b516: Preparing
-# 3220beed9b06: Preparing
-# 684f82921421: Preparing
-# 9af5f53e8f62: Preparing
-# fe0d845e767b: Waiting
-# f25ec1d93a58: Waiting
-# 794ce8b1b516: Waiting
-# 3220beed9b06: Waiting
-# 684f82921421: Waiting
-# 9af5f53e8f62: Waiting
-# d41bcd3a037b: Waiting
-# name unknown: The repository with name 'proshop-backend' does not exist in the registry with id '036692858685'
-# Error: Process completed with exit code 1.
-
 name: proshop app Image CI
 
 on:
   push:
     branches:
       - feature/**
+      - staging
 
-# required permissions by GitHub Actions for assuming AWS IAM role
 permissions:
   id-token: write
   contents: read
@@ -180,6 +158,7 @@ env:
 jobs:
   proshop-app-build-and-deploy:
     runs-on: ubuntu-latest
+    environment: dev  # Add the environment context
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v3
@@ -192,7 +171,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::036692858685:role/GitHubActionsCICDroleVSS
+          role-to-assume: ${{ vars.IAM_ROLE }} # Use vars.IAM_ROLE to access the environment variable
           role-session-name: GitHubActionsCICDrole
           aws-region: ${{ env.AWS_REGION }}
 
@@ -206,6 +185,7 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: proshop-backend
           IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./backend
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -221,68 +201,68 @@ jobs:
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
+      - name: Deploy Backend with Helm
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install backend ./helm/backend -f ./helm/backend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
 
+      - name: Deploy Frontend with Helm
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install frontend ./helm/frontend -f ./helm/frontend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
 
+./terraform/production.tfvars
+Contents of ./terraform/production.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.large"
 
+./terraform/main.tf
+Contents of ./terraform/main.tf:
+provider "aws" {
+  region = var.region
+}
 
-#there was syntax error : 
+resource "aws_instance" "example" {
+  ami           = var.ami
+  instance_type = var.instance_type
 
+  tags = {
+    Name = "example-instance"
+  }
+}
 
-# name: proshop app Image CI
+./terraform/dev.tfvars
+Contents of ./terraform/dev.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.micro"
 
-# on:
-#   push:
-#     branches:
-#       - feature/**
+./terraform/staging.tfvars
+Contents of ./terraform/staging.tfvars:
+region         = "us-east-1"
+ami            = "ami-0b67181166bc73bf7"  # Replace with your AMI ID
+instance_type  = "t2.medium"
 
-# # required permissions by GitHub Actions for assuming AWS IAM role
-# permissions:
-#   id-token: write
-#   contents: read
+./terraform/variables.tf
+Contents of ./terraform/variables.tf:
+variable "region" {
+  description = "The AWS region to deploy into"
+  type        = string
+}
 
-# env:
-#   AWS_REGION: "us-east-1"
-#   ENVIRONMENT_STAGE: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
+variable "ami" {
+  description = "The AMI to use for the instance"
+  type        = string
+}
 
-# jobs:
-#   proshop-app-build-and-deploy:
-#     environment: ${{ github.ref == 'refs/heads/main' ? 'production' : (github.ref == 'refs/heads/staging' ? 'staging' : 'dev') }}
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout Branch
-#         uses: actions/checkout@v3
+variable "instance_type" {
+  description = "The type of instance to use"
+  type        = string
+}
 
-#       - name: Configure AWS Credentials
-#         uses: aws-actions/configure-aws-credentials@v4
-#         with:
-#           role-to-assume: ${{ vars.IAM_ROLE }}
-#           role-session-name: GitHubActionsCICDrole
-#           aws-region: ${{ env.AWS_REGION }}
-
-#       - name: Login to Amazon ECR
-#         id: login-ecr
-#         uses: aws-actions/amazon-ecr-login@v2
-
-#       - name: Backend - Build, tag, and push docker image to Amazon ECR
-#         if: github.ref != 'refs/heads/main'
-#         env:
-#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#           REPOSITORY: proshop-backend
-#           IMAGE_TAG: ${{ github.sha }}
-#         run: |
-#           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-#           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-#       - name: Frontend - Build, tag, and push docker image to Amazon ECR
-#         if: github.ref != 'refs/heads/main'
-#         env:
-#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#           REPOSITORY: proshop-frontend
-#           IMAGE_TAG: ${{ github.sha }}
-#         working-directory: ./frontend
-#         run: |
-#           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-#           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 ./frontend/Dockerfile
 Contents of ./frontend/Dockerfile:
 # Use an official Node.js image as the base image
@@ -329,294 +309,197 @@ EXPOSE 5000
 #Start Backend Server
 CMD ["npm", "run", "server"]
 
-./helm-chart/Chart.yaml
-Contents of ./helm-chart/Chart.yaml:
+./helm/frontend/dev-values.yaml
+Contents of ./helm/frontend/dev-values.yaml:
+replicaCount: 2
+image:
+  tag: <IMAGE_TAG>
+service:
+  type: ClusterIP
+  port: 5000
+ingress:
+  enabled: true
+  hosts:
+    - host: shop-centos-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - shop-centos-dev.312centos.com
+
+./helm/frontend/Chart.yaml
+Contents of ./helm/frontend/Chart.yaml:
 apiVersion: v2
-name: Helm Chart
-description: proshop app helm chart
+name: frontend
+description: A Helm chart for Kubernetes
 type: application
 version: 0.1.0
-./helm-chart/values/frontend/staging-values.yaml
-Contents of ./helm-chart/values/frontend/staging-values.yaml:
-replicaCount: 1
-port: 3000
-servicePort: 3000
-serviceProtocol: TCP
-appName: proshop-frontend
-hostName: shop-centos-staging.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-staging.com-tls
-appNamespace: shop-app-staging
-serviceAccount: default
-awsSecrets:
-  enabled: false
-appConfig:
-  envVars:
-    - name: DANGEROUSLY_DISABLE_HOST_CHECK
-      value: "true"
-  secrets: []
+appVersion: "1.0"
 
-./helm-chart/values/frontend/dev-values.yaml
-Contents of ./helm-chart/values/frontend/dev-values.yaml:
-replicaCount: 1
-port: 3000
-servicePort: 3000
-serviceProtocol: TCP
-appName: proshop-frontend
-hostName: shop-centos-dev.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-dev.com-tls
-appNamespace: shop-app-dev
-serviceAccount: default
-awsSecrets:
-  enabled: false
-appConfig:
-  envVars:
-    - name: DANGEROUSLY_DISABLE_HOST_CHECK
-      value: "true"
-  secrets: []
-
-./helm-chart/values/frontend/prod-values.yaml
-Contents of ./helm-chart/values/frontend/prod-values.yaml:
-replicaCount: 1
-port: 3000
-servicePort: 3000
-serviceProtocol: TCP
-appName: proshop-frontend
-hostName: shop-centos-production.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-production.com-tls
-appNamespace: shop-app-production
-serviceAccount: default
-awsSecrets:
-  enabled: false
-appConfig:
-  envVars:
-    - name: DANGEROUSLY_DISABLE_HOST_CHECK
-      value: "true"
-  secrets: []
-
-./helm-chart/values/backend/staging-values.yaml
-Contents of ./helm-chart/values/backend/staging-values.yaml:
-replicaCount: 1
-port: 5000
-servicePort: 5000
-serviceProtocol: TCP
-appName: proshop-backend
-hostName: shop-centos-api-staging.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-staging.com-tls
-appNamespace: shop-app-staging
-serviceAccount: proshop-app-backend-sa
-awsSecrets:
-  enabled: true
-  secretProviderClassName: "proshop-backend-aws-secrets"
-  k8sSecretName: "proshop-db-credentials"
-  awsSecretName: "mongo_db_secret"
-  secretKeys:
-    - key: "mongo_db_uri"
-appConfig:
-  envVars:
-    - name: NODE_ENV
-      value: "development"
-  secrets:
-    - name: MONGO_URI
-      secretName: proshop-db-credentials
-      key: "mongo_db_uri"
-
-./helm-chart/values/backend/dev-values.yaml
-Contents of ./helm-chart/values/backend/dev-values.yaml:
-replicaCount: 1
-port: 5000
-servicePort: 5000
-serviceProtocol: TCP
-appName: proshop-backend
-hostName: shop-centos-api-dev.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-dev.com-tls
-appNamespace: shop-app-dev
-serviceAccount: proshop-app-backend-sa
-awsSecrets:
-  enabled: true
-  secretProviderClassName: "proshop-backend-aws-secrets"
-  k8sSecretName: "proshop-db-credentials"
-  awsSecretName: "mongo_db_secret"
-  secretKeys:
-    - key: "mongo_db_uri"
-appConfig:
-  envVars:
-    - name: NODE_ENV
-      value: "development"
-  secrets:
-    - name: MONGO_URI
-      secretName: proshop-db-credentials
-      key: "mongo_db_uri"
-
-./helm-chart/values/backend/prod-values.yaml
-Contents of ./helm-chart/values/backend/prod-values.yaml:
-replicaCount: 1
-port: 5000
-servicePort: 5000
-serviceProtocol: TCP
-appName: proshop-backend
-hostName: shop-centos-api-production.312centos.com
-ingress:
-  enabled: true
-  tls:
-    enabled: true
-    secretName: 312centos-production.com-tls
-appNamespace: shop-app-production
-serviceAccount: proshop-app-backend-sa
-awsSecrets:
-  enabled: true
-  secretProviderClassName: "proshop-backend-aws-secrets"
-  k8sSecretName: "proshop-db-credentials"
-  awsSecretName: "mongo_db_secret"
-  secretKeys:
-    - key: "mongo_db_uri"
-appConfig:
-  envVars:
-    - name: NODE_ENV
-      value: "production"
-  secrets:
-    - name: MONGO_URI
-      secretName: proshop-db-credentials
-      key: "mongo_db_uri"
-
-./helm-chart/templates/deployment.yaml
-Contents of ./helm-chart/templates/deployment.yaml:
+./helm/frontend/templates/deployment.yaml
+Contents of ./helm/frontend/templates/deployment.yaml:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.appName }}
-  namespace: {{ .Values.appNamespace }}
+  name: {{ include "frontend.fullname" . }}
   labels:
-    app: {{ .Values.appName }}
+    {{- include "frontend.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.appName }}
+      {{- include "frontend.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: {{ .Values.appName }}
+        {{- include "frontend.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ .Values.serviceAccount}}
       containers:
-      - name: {{ .Values.appName }}
-        image: "{{ .Values.image.repo }}:{{ .Values.image.tag }}"
-        ports:
-        - containerPort: {{ .Values.port }}
-        env:
-        {{- range .Values.appConfig.envVars }}
-        - name: {{ .name }}
-          value: {{ .value | quote }}
-        {{- end }}
-        {{- range .Values.appConfig.secrets }}
-        - name: {{ .name }}
-          valueFrom:
-            secretKeyRef:
-              name: {{ .secretName }}
-              key: {{ .key }}
-        {{- end }}
-        volumeMounts:
-        {{- if .Values.awsSecrets.enabled }}
-        - name: secrets-store-inline
-          mountPath: "/mnt/secrets-store"
-          readOnly: true
-        {{- end }}
-      volumes:
-      {{- if .Values.awsSecrets.enabled }}
-      - name: secrets-store-inline
-        csi:
-          driver: secrets-store.csi.k8s.io
-          readOnly: true
-          volumeAttributes:
-            secretProviderClass: {{ .Values.awsSecrets.secretProviderClassName }}
-      {{- end }}
-./helm-chart/templates/ingress.yaml
-Contents of ./helm-chart/templates/ingress.yaml:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: frontend-secrets
+
+./helm/frontend/templates/service.yaml
+Contents of ./helm/frontend/templates/service.yaml:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "{{ .Values.appName }}-svc"
-  namespace: {{ .Values.appNamespace }}
+  name: {{ include "frontend.fullname" . }}
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
 spec:
-  selector:
-    app: {{ .Values.appName }}
+  type: {{ .Values.service.type }}
   ports:
-    - protocol: {{ .Values.serviceProtocol }}
-      port: {{ .Values.servicePort }}
-      targetPort: {{ .Values.port }}
----
-{{- if .Values.ingress.enabled }}
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: "{{ .Values.appName}}-ingress"
-  namespace: {{ .Values.appNamespace }}
+    - port: {{ .Values.service.port }}
+      targetPort: 5000
+  selector:
+    {{- include "frontend.selectorLabels" . | nindent 4 }}
+
+./helm/frontend/values.yaml
+Contents of ./helm/frontend/values.yaml:
+replicaCount: 1
+
+image:
+  repository: <ECR_REGISTRY>/proshop-frontend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
   annotations:
     kubernetes.io/ingress.class: nginx
-spec:
-  rules:
-  - host: {{ .Values.hostName}}
-    http:
+  hosts:
+    - host: shop-centos-dev.312centos.com
       paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: "{{ .Values.appName }}-svc"
-            port:
-              number: {{ .Values.servicePort }}
-  ingressClassName: nginx
-  {{- if .Values.ingress.tls.enabled }}
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+./helm/backend/dev-values.yaml
+Contents of ./helm/backend/dev-values.yaml:
+replicaCount: 2
+image:
+  tag: <IMAGE_TAG>
+service:
+  type: ClusterIP
+  port: 5000
+ingress:
+  enabled: true
+  hosts:
+    - host: shop-centos-dev.312ubuntu.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
   tls:
-  - hosts:
-      - {{ .Values.hostName }}
-    secretName: {{ .Values.ingress.tls.secretName }}
-  {{- end }}
-{{- end }}
-./helm-chart/templates/secret-provisioner.yaml
-Contents of ./helm-chart/templates/secret-provisioner.yaml:
-{{- if .Values.awsSecrets.enabled }}
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
+    - secretName: backend-tls
+      hosts:
+        - shop-centos-dev.312centos.com
+
+./helm/backend/Chart.yaml
+Contents of ./helm/backend/Chart.yaml:
+apiVersion: v2
+name: backend
+description: A Helm chart for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+./helm/backend/templates/deployment.yaml
+Contents of ./helm/backend/templates/deployment.yaml:
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: {{ .Values.awsSecrets.secretProviderClassName }}
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
 spec:
-  provider: aws
-  secretObjects:
-    - secretName: {{ .Values.awsSecrets.k8sSecretName }}
-      type: Opaque
-      data:
-      {{- range .Values.awsSecrets.secretKeys }}
-      - objectName: "{{ .key }}-alias"
-        key: {{ .key }}
-      {{- end }}
-  parameters:
-    objects: |
-      - objectName: "{{ .Values.awsSecrets.awsSecretName }}"
-        objectType: "secretsmanager"
-        jmesPath:
-          {{- range .Values.awsSecrets.secretKeys }}
-          - Path: "{{ .key }}"
-            ObjectAlias: "{{ .key }}-alias"
-          {{- end }}
-{{- end }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "backend.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: backend-secrets
+
+./helm/backend/templates/service.yaml
+Contents of ./helm/backend/templates/service.yaml:
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 5000
+  selector:
+    {{- include "backend.selectorLabels" . | nindent 4 }}
+
+./helm/backend/values.yaml
+Contents of ./helm/backend/values.yaml:
+replicaCount: 1
+
+image:
+  repository: <ECR_REGISTRY>/proshop-backend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: shop-centos-dev.312centos.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+

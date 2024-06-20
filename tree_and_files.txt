@@ -157,7 +157,7 @@ env:
 
 jobs:
   proshop-app-build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     environment: dev  # Add the environment context
     steps:
       - name: Checkout Branch
@@ -320,7 +320,7 @@ service:
 ingress:
   enabled: true
   hosts:
-    - host: shop-centos-dev.312ubuntu.com
+    - host: shop-centos-dev.312centos.com
       paths:
         - path: /
           pathType: ImplementationSpecific
@@ -417,7 +417,7 @@ service:
 ingress:
   enabled: true
   hosts:
-    - host: shop-centos-dev.312ubuntu.com
+    - host: shop-centos-dev.312centos.com
       paths:
         - path: /
           pathType: ImplementationSpecific

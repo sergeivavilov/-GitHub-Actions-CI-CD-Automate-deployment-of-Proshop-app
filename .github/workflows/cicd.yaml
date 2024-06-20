@@ -5,17 +5,18 @@ on:
     branches:
       - feature/**
 
+# Required permissions by GitHub Actions for assuming AWS IAM role
 permissions:
   id-token: write
   contents: read
 
 env:
   AWS_REGION: "us-east-1"
+  IAM_ROLE: "arn:aws:iam::036692858685:role/GitHubActionsTerraformIAMrole"
 
 jobs:
   proshop-app-build-and-deploy:
-    runs-on: ubuntu-latest
-    environment: dev  # Add the environment context
+    runs-on: centos-latest
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v3
@@ -23,13 +24,19 @@ jobs:
       - name: Set Environment Stage
         id: set-env-stage
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV; else echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV; fi
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then 
+            echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; 
+          elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then 
+            echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV;
+          else 
+            echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV;
+          fi
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.IAM_ROLE }} # Use vars.IAM_ROLE to access the environment variable
-          role-session-name: GitHubActionsCICDrole
+          role-to-assume: ${{ env.IAM_ROLE }}
+          role-session-name: GitHubActionsRoleSession
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -42,7 +49,6 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: proshop-backend
           IMAGE_TAG: ${{ github.sha }}
-        working-directory: ./backend
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -58,14 +64,136 @@ jobs:
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-      - name: Deploy Backend with Helm
-        env:
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          helm upgrade --install backend ./helm/backend -f ./helm/backend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
 
-      - name: Deploy Frontend with Helm
-        env:
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          helm upgrade --install frontend ./helm/frontend -f ./helm/frontend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
+# name: proshop app Image CI
+
+# on:
+#   push:
+#     branches:
+#       - feature/**
+
+# # required permissions by GitHub Actions for assuming AWS IAM role
+# permissions:
+#   id-token: write
+#   contents: read
+
+# env:
+#   AWS_REGION: "us-east-1"
+
+# jobs:
+#   proshop-app-build-and-deploy:
+#     runs-on: centos-latest
+#     steps:
+#       - name: Checkout Branch
+#         uses: actions/checkout@v3
+
+#       - name: Set Environment Stage
+#         id: set-env-stage
+#         run: |
+#           if [ "${{ github.ref }}" == "refs/heads/main" ]; then echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV; else echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV; fi
+
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: arn:aws:iam::036692858685:role/GitHubActionsCICDroleVSS
+#           role-session-name: GitHubActionsCICDrole
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       - name: Login to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       - name: Backend - Build, tag, and push docker image to Amazon ECR
+#         if: github.ref != 'refs/heads/main'
+#         env:
+#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           REPOSITORY: proshop-backend
+#           IMAGE_TAG: ${{ github.sha }}
+#         run: |
+#           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+#           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+#       - name: Frontend - Build, tag, and push docker image to Amazon ECR
+#         if: github.ref != 'refs/heads/main'
+#         env:
+#           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           REPOSITORY: proshop-frontend
+#           IMAGE_TAG: ${{ github.sha }}
+#         working-directory: ./frontend
+#         run: |
+#           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+#           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+
+
+# # name: proshop app Image CI
+
+# # on:
+# #   push:
+# #     branches:
+# #       - feature/**
+
+# # permissions:
+# #   id-token: write
+# #   contents: read
+
+# # env:
+# #   AWS_REGION: "us-east-1"
+
+# # jobs:
+# #   proshop-app-build-and-deploy:
+# #     runs-on: centos-latest
+# #     environment: dev  # Add the environment context
+# #     steps:
+# #       - name: Checkout Branch
+# #         uses: actions/checkout@v3
+
+# #       - name: Set Environment Stage
+# #         id: set-env-stage
+# #         run: |
+# #           if [ "${{ github.ref }}" == "refs/heads/main" ]; then echo "ENVIRONMENT_STAGE=production" >> $GITHUB_ENV; elif [ "${{ github.ref }}" == "refs/heads/staging" ]; then echo "ENVIRONMENT_STAGE=staging" >> $GITHUB_ENV; else echo "ENVIRONMENT_STAGE=dev" >> $GITHUB_ENV; fi
+
+# #       - name: Configure AWS Credentials
+# #         uses: aws-actions/configure-aws-credentials@v4
+# #         with:
+# #           role-to-assume: ${{ vars.IAM_ROLE }} # Use vars.IAM_ROLE to access the environment variable
+# #           role-session-name: GitHubActionsCICDrole
+# #           aws-region: ${{ env.AWS_REGION }}
+
+# #       - name: Login to Amazon ECR
+# #         id: login-ecr
+# #         uses: aws-actions/amazon-ecr-login@v2
+
+# #       - name: Backend - Build, tag, and push docker image to Amazon ECR
+# #         if: github.ref != 'refs/heads/main'
+# #         env:
+# #           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+# #           REPOSITORY: proshop-backend
+# #           IMAGE_TAG: ${{ github.sha }}
+# #         working-directory: ./backend
+# #         run: |
+# #           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+# #           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+# #       - name: Frontend - Build, tag, and push docker image to Amazon ECR
+# #         if: github.ref != 'refs/heads/main'
+# #         env:
+# #           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+# #           REPOSITORY: proshop-frontend
+# #           IMAGE_TAG: ${{ github.sha }}
+# #         working-directory: ./frontend
+# #         run: |
+# #           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+# #           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+# #       - name: Deploy Backend with Helm
+# #         env:
+# #           IMAGE_TAG: ${{ github.sha }}
+# #         run: |
+# #           helm upgrade --install backend ./helm/backend -f ./helm/backend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace
+
+# #       - name: Deploy Frontend with Helm
+# #         env:
+# #           IMAGE_TAG: ${{ github.sha }}
+# #         run: |
+# #           helm upgrade --install frontend ./helm/frontend -f ./helm/frontend/dev-values.yaml --set image.tag=${{ env.IMAGE_TAG }} --namespace shop-app --create-namespace

@@ -78,7 +78,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 
 - **Jobs**:
   - **proshop-app-build-and-deploy**:
-    - Runs on `ubuntu-latest`.
+    - Runs on `centos-latest`.
     - Uses the appropriate environment based on the branch.
     - **Steps**:
       1. **Checkout Branch**:
@@ -759,9 +759,9 @@ for example, create 3 helm values YAML files - dev-values.yaml, staging-values.y
 
 Deploy apps in shop-app namespace
 
-Must deploy with hostnames configured and accessible to the Internet (e.g., 312centos.com, 312ubuntu.com, 312redhat.com).
+Must deploy with hostnames configured and accessible to the Internet (e.g., 312centos.com, 312centos.com, 312redhat.com).
 
-requested domain syntax shop-TEAM-dev.TEAM_DOMAIN (ex: shop-ubuntu-dev.312ubuntu.com)
+requested domain syntax shop-TEAM-dev.TEAM_DOMAIN (ex: shop-centos-dev.312centos.com)
 
 define values in staging and production configs accordingly, even if we are not going to deploy them yet (shop-TEAM-staging.TEAM_DOMAIN, shop-TEAM.TEAM_DOMAIN)
 
@@ -829,7 +829,7 @@ A GitHub repository for the Proshop app has been created.
 
 Hostname Configuration:
 
-During deployment, the GitHub Actions CI/CD pipeline configures the specified hostnames (e.g., 312centos.com, 312ubuntu.com, 312redhat.com).
+During deployment, the GitHub Actions CI/CD pipeline configures the specified hostnames (e.g., 312centos.com, 312centos.com, 312redhat.com).
 
 Ingress resources are correctly configured in Kubernetes to route traffic to the appropriate services.
 
@@ -1319,7 +1319,7 @@ env:
 
 jobs:
   deploy-terraform:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     # default settings to apply for all the steps
     defaults:
       run:
@@ -1381,7 +1381,7 @@ jobs:
     # if PR is into main branch,
     # and if PR approval was received
     if: github.event.pull_request.base.ref == 'main' && github.event.review.state == 'APPROVED'
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     # default settings to apply for all the steps
     defaults:
       run:
@@ -1472,7 +1472,7 @@ env:
 
 jobs:
   setup-eks-cluster:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     defaults:
         run:
           shell: bash
@@ -1535,7 +1535,7 @@ env:
 
 jobs:
   deploy-platform-tools:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     defaults:
       run:
         shell: bash

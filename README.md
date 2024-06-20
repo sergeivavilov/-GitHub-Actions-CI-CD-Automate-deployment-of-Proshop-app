@@ -351,7 +351,6 @@ spec:
 
 Note: The secretName should refer to a Kubernetes Secret that contains your TLS certificate (tls.crt) and private key (tls.key). Referencing this secret in an Ingress tells the Ingress controller to secure the channel from the client to the load balancer using TLS. The secret should be in the same namespace as an ingress resource.
 
-
 ======================================================================================================================================================
 {
   echo "Directory Structure:";

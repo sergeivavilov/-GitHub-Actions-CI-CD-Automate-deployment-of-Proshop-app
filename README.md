@@ -1,26 +1,3 @@
-{
-  echo "Directory Structure:";
-  tree;
-  echo "";
-
-  # Print the contents of the workflow files in .github/workflows
-  find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of the Terraform configuration files
-  find . -type f \( -name "*.tf" -o -name "*.tfvars" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of Dockerfiles
-  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-
-  # Print the contents of Helm chart files
-  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-} > tree_and_files.txt
-
-
-================================================================================================================================================================================================================================================
-
-
-
 # ProShop Application Deployment Guide
 
 # Automated CI/CD Pipeline for a Full-Stack Application
@@ -36,6 +13,9 @@ This README describes the creation and configuration of an automated CI/CD pipel
 5. [Docker and Amazon ECR](#docker-and-amazon-ecr)
 6. [AWS IAM](#aws-iam)
 7. [Helm](#helm)
+8. [Backend and Frontend deployment](#backend-and-frontend-deployment)
+9. [Secrets Management](#secrets-management)
+10. [Ingress configuration and TLS](#ingress-configuration-and-tls)
 
 ## Introduction
 
@@ -57,6 +37,7 @@ Before you begin, ensure you have the following:
 The architecture of the pipeline is designed to streamline the deployment process. Here is an overview:
 
 - **Frontend and Backend Repositories:** Separate folders for frontend and backend code.
+- **Frontend and Backend Repositories:** Separate repositories for frontend and backend code.
 - **GitHub Actions:** Workflows defined to automate build, test, and deployment processes.
 - **Docker:** Containerizes the application for consistency across different environments.
 - **Helm:** Manages Kubernetes manifests and deployment configurations.
@@ -74,7 +55,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 
 ### Key Steps
 
-1. **Checkout Code:** Uses `actions/checkout@v3` to fetch the latest code.
+1. **Checkout Code:** Uses `actions/checkout@v2` to fetch the latest code.
 2. **Build and Test:** Runs the build and test commands for both frontend and backend.
 3. **Docker Build and Push:** Builds Docker images and pushes them to Docker Hub or an AWS ECR repository.
 4. **Deploy with Helm:** Deploys the application to the Kubernetes cluster using Helm. (Not yet)
@@ -98,7 +79,7 @@ GitHub Actions are used to automate the CI/CD process. Here’s a breakdown of t
 
 - **Jobs**:
   - **proshop-app-build-and-deploy**:
-    - Runs on `ubuntu-latest`.
+    - Runs on `centos-latest`.
     - Uses the appropriate environment based on the branch.
     - **Steps**:
       1. **Checkout Branch**:
@@ -199,16 +180,179 @@ This configuration establishes a secure link between GitHub Actions and AWS, fac
 
 ## Helm
 
-Working on it...
+Helm charts are instrumental in packaging and deploying Kubernetes applications. For the ProShop application, Helm charts enable the deployment of its frontend and backend components separately, ensuring independent scaling, updating, and management. This section provides insights into configuring these charts and using Helm values to customize deployments for various environments.
 
+### Helm Chart Structure
 
+A typical Helm chart includes the following key components:
 
+- **Chart.yaml**: Contains metadata such as the chart's version, name, and description.
+- **values**: Directory contains backend and frontend values files.
+- **values.yaml**: Stores configuration values, which can be used to create resources. This repo includes specific environment values files like dev-values.yaml, staging-values.yaml, and prod-values.yaml.
+- **templates/**: A directory for Kubernetes resource templates populated with values from values.yaml.
 
+### Example Values File Snippets
+
+The values.yaml files define the deployment configurations for different environments. Below are example values files for a hypothetical development environment for both frontend and backend applications.
+
+**Frontend dev-values.yaml Example:**
+
+```yaml
+replicaCount: 1
+port: 3000
+servicePort: 3000
+serviceProtocol: TCP
+appName: proshop-frontend
+hostName: shop-centos-dev.312centos.com
+ingress:
+  enabled: true
+  tls:
+    enabled: true
+    secretName: 312centos-dev.com-tls
+appNamespace: shop-app-dev
+serviceAccount: default
+awsSecrets:
+  enabled: false
+appConfig:
+  envVars:
+    - name: DANGEROUSLY_DISABLE_HOST_CHECK
+      value: "true"
+  secrets: []
+```
+
+### Environment-Specific Values
+
+The project structure supports potential future expansions to staging and production environments by maintaining separate values files for each (e.g., dev-values.yaml, staging-values.yaml, prod-values.yaml). This allows for environment-specific configurations such as replica counts, image tags, and hostnames.
+
+## Backend and Frontend deployment
+
+The deployment process is automated through GitHub Actions workflows, triggered by code pushes. These workflows build Docker images, tag them appropriately, and deploy the application using Helm charts. The deployment steps for the backend and frontend are specified in the workflow, incorporating environment-specific configurations and dynamic image tagging.
+
+#### Deployment steps
+
+Example:
+
+```yaml
+- name: Frontend - Deploy to Kubernetes
+  env:
+    SEMANTIC_TAG: "v1.0.1"
+  run: |
+    IMAGE_TAG=${{ github.ref == 'refs/heads/main' && env.SEMANTIC_TAG || github.sha }}
+    helm upgrade --install proshop-app-frontend ./helm-chart \
+      --values ./helm-chart/values/frontend/${{ env.ENVIRONMENT_STAGE }}-values.yaml \
+      --namespace shop-app --create-namespace \
+      --set image.tag="$IMAGE_TAG"
+```
+
+The deployment process leverages different values.yaml files for each environment (development, staging, production), located in respective directories within the helm-chart/values folder. It allows each environment to have different configuration of the same app, allowing, for example easy testing.
+
+By integrating Helm deployments into the GitHub Actions workflow, the ProShop application achieves automated, consistent, and environment-specific deployments, significantly enhancing the CI/CD pipeline's efficiency and reliability.
+
+## Secrets Management
+
+Because the backend needs access to a database, we need to somehow add database credentials into the code. Credentials are sensitive data, so we want to do it as securely as possible. This section will provide guideline on it. Following this guideline it is not only possible to secure the database connectivity by centralizing secret management in AWS Secrets Manager, but also ensure seamless integration with the Kubernetes-deployed applications.
+
+#### Integration of AWS Secrets with Kubernetes
+
+AWS Secrets Manager and Config Provider (ASCP) enables Kubernetes to utilize secrets stored in AWS Secrets Manager. Follow these steps for integration:
+
+1. **Install ASCP in Your EKS Cluster**:
+   Deploy AWS Secrets Manager and Config Provider within your EKS cluster via Helm.
+
+2. **Set Up OIDC Identity Provider for EKS**:
+   Configure an OIDC Identity Provider for your EKS cluster to establish trust relationships between AWS IAM roles and Kubernetes service accounts.
+
+3. **Create IAM Role and Kubernetes Service Account**:
+   Create an IAM role with permissions to access AWS Secrets Manager and associate it with a Kubernetes service account.
+
+4. **Configure the SecretProviderClass**:
+
+   ```yaml
+   apiVersion: secrets-store.csi.x-k8s.io/v1
+   kind: SecretProviderClass
+   metadata:
+     name: my-secret
+   spec:
+     provider: aws
+     parameters:
+       objects: |
+         - objectName: "MySecret"
+           objectType: "secretsmanager"
+
+5. **Reference the Secret in the Deployment**:
+
+```yaml
+# Create secret-based ENV variables from AWS Secrets Manager
+        {{- range .Values.appConfig.secrets }}
+        - name: {{ .name }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .secretName }}  # Name of Kubernetes secret created by AWS Secrets Manager and SecretProviderClass
+              key: {{ .key }}  # Specific key within the secret
+        {{- end }}
+
+```
+
+Useful Resource that can help to integrate AWS Secrets with Kubernetes: [AWS EKS & Secrets Manager (File & Env | Kubernetes | Secrets Store CSI Driver | K8s)](https://www.youtube.com/watch?v=Rmgo6vCytsg).
+
+## Ingress configuration and TLS
+
+Ingress exposes HTTP and HTTPS routes from outside the cluster to services within the cluster. Traffic routing is controlled by rules defined on the Ingress resource. This section outlines the process of setting up Ingress resources, leveraging annotations for dynamic DNS record management, and securing your application with TLS encryption.
+
+### Ingress Setup
+
+1. **Ingress Controller**: You must have an Ingress controller to satisfy an Ingress. Only creating an Ingress resource has no effect. You may need to deploy an Ingress controller such as ingress-nginx. Here is the [official installation guide](https://kubernetes.github.io/ingress-nginx/deploy/#aws) for AWS deployment.
+
+2. **Defining Ingress Resources**: Define Ingress rules to route external HTTP(S) traffic to the correct services within your cluster. Below is an example Ingress resource using NGINX as the Ingress controller, with annotations for dynamic DNS configuration:
+
+   ```yaml
+   {{- if .Values.ingress.enabled }}
+   apiVersion: networking.k8s.io/v1
+   kind: Ingress
+   metadata:
+     name: "{{ .Values.appName }}-ingress"
+     namespace: "{{ .Values.appNamespace }}"
+     annotations:
+       kubernetes.io/ingress.class: "nginx"
+   spec:
+     rules:
+     - host: "<your-application-domain>"
+       http:
+         paths:
+         - path: "/"
+           pathType: Prefix
+           backend:
+             service:
+               name: "<your-service-name>"
+               port:
+                 number: <your-service-port>
+   {{- end }}
+   ```
+
+### TLS Configuration
+You can secure an Ingress by specifying a Secret that contains a TLS private key and certificate. The Ingress resource only supports a single TLS port, 443. It is essential to protect data in transit and ensure the confidentiality and integrity of the data between client and the server.
+
+1. **Certificate Management**: Cert-manager is a native Kubernetes certificate management controller. It can help with issuing certificates from a variety of sources, such as Let's Encrypt, HashiCorp Vault, Venafi, a simple signing key pair, or self signed. 
+
+Let's Encrypt is a nonprofit Certificate Authority that provides TLS certificates to 300 million websites.
+
+Alternatively, if you have an existing wildcard certificate that matches your domain naming scheme, you can also use that.
+
+2. **Incorporating TLS in Ingress**: Modify your Ingress resource to include TLS settings, referencing the Kubernetes Secret that stores your TLS certificate and private key.
+
+Example:
+```yaml
+spec:
+  tls:
+  - hosts:
+      - https-example.foo.com
+    secretName: testsecret-tls
+  ...
+  ```
+
+Note: The secretName should refer to a Kubernetes Secret that contains your TLS certificate (tls.crt) and private key (tls.key). Referencing this secret in an Ingress tells the Ingress controller to secure the channel from the client to the load balancer using TLS. The secret should be in the same namespace as an ingress resource.
 
 ======================================================================================================================================================
-command for gpt help :
-
-
 {
   echo "Directory Structure:";
   tree;
@@ -216,7 +360,24 @@ command for gpt help :
 
   # Print the contents of the workflow files in .github/workflows
   find .github/workflows -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
-} > tree_and_workflows.txt
+
+  # Print the contents of Dockerfiles
+  find . -type f -name "Dockerfile" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of backend and frontend YAML files
+  find ./backend -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+  find ./frontend -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the AWS authentication files
+  find . -type f -name "aws.auth" -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of Helm chart files
+  find ./helm -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+
+  # Print the contents of the helm-chart folder files
+  find ./helm-chart -type f \( -name "*.yaml" -o -name "*.yml" \) -print -exec echo "Contents of {}:" \; -exec cat {} \; -exec echo "" \;
+} > tree_and_files.txt
+
 
 ========================================================================================================================
 
@@ -598,9 +759,9 @@ for example, create 3 helm values YAML files - dev-values.yaml, staging-values.y
 
 Deploy apps in shop-app namespace
 
-Must deploy with hostnames configured and accessible to the Internet (e.g., 312centos.com, 312ubuntu.com, 312redhat.com).
+Must deploy with hostnames configured and accessible to the Internet (e.g., 312centos.com, 312centos.com, 312redhat.com).
 
-requested domain syntax shop-TEAM-dev.TEAM_DOMAIN (ex: shop-ubuntu-dev.312ubuntu.com)
+requested domain syntax shop-TEAM-dev.TEAM_DOMAIN (ex: shop-centos-dev.312centos.com)
 
 define values in staging and production configs accordingly, even if we are not going to deploy them yet (shop-TEAM-staging.TEAM_DOMAIN, shop-TEAM.TEAM_DOMAIN)
 
@@ -668,7 +829,7 @@ A GitHub repository for the Proshop app has been created.
 
 Hostname Configuration:
 
-During deployment, the GitHub Actions CI/CD pipeline configures the specified hostnames (e.g., 312centos.com, 312ubuntu.com, 312redhat.com).
+During deployment, the GitHub Actions CI/CD pipeline configures the specified hostnames (e.g., 312centos.com, 312centos.com, 312redhat.com).
 
 Ingress resources are correctly configured in Kubernetes to route traffic to the appropriate services.
 
@@ -1158,7 +1319,7 @@ env:
 
 jobs:
   deploy-terraform:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     # default settings to apply for all the steps
     defaults:
       run:
@@ -1220,7 +1381,7 @@ jobs:
     # if PR is into main branch,
     # and if PR approval was received
     if: github.event.pull_request.base.ref == 'main' && github.event.review.state == 'APPROVED'
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     # default settings to apply for all the steps
     defaults:
       run:
@@ -1311,7 +1472,7 @@ env:
 
 jobs:
   setup-eks-cluster:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     defaults:
         run:
           shell: bash
@@ -1374,7 +1535,7 @@ env:
 
 jobs:
   deploy-platform-tools:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     defaults:
       run:
         shell: bash

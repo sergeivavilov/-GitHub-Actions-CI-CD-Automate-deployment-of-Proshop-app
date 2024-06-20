@@ -7,7 +7,7 @@ service:
 ingress:
   enabled: true
   hosts:
-    - host: shop-centos-dev.312ubuntu.com
+    - host: shop-centos-dev.312centos.com
       paths:
         - path: /
           pathType: ImplementationSpecific

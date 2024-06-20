@@ -16,7 +16,7 @@ env:
 
 jobs:
   proshop-app-build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: centos-latest
     steps:
       - name: Checkout Branch
         uses: actions/checkout@v3
@@ -82,7 +82,7 @@ jobs:
 
 # jobs:
 #   proshop-app-build-and-deploy:
-#     runs-on: ubuntu-latest
+#     runs-on: centos-latest
 #     steps:
 #       - name: Checkout Branch
 #         uses: actions/checkout@v3
@@ -142,7 +142,7 @@ jobs:
 
 # # jobs:
 # #   proshop-app-build-and-deploy:
-# #     runs-on: ubuntu-latest
+# #     runs-on: centos-latest
 # #     environment: dev  # Add the environment context
 # #     steps:
 # #       - name: Checkout Branch
